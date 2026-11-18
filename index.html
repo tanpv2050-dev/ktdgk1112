@@ -96,7 +96,7 @@ button:disabled{opacity:.5;cursor:default}
 <script>
 const $=id=>document.getElementById(id);
 /* Dán đường dẫn Web App (kết thúc bằng /exec) khi đặt trang này ngoài Apps Script, ví dụ trên GitHub Pages */
-const API_URL='https://script.google.com/macros/s/AKfycbzEhbELJO7ojTGuXFFTrdH9r8Gs7rvYB6zIYKewh6m7B7mDkEXkqu7gfdAhG0lRxCq1/exec';
+const API_URL='https://script.google.com/macros/s/AKfycbyPlUX7oZFGGp4sDV8bGxgtLy-Ow-loT5nGrVPbORqhBHaEUlp_x7mixbNmeVgblklb/exec';
 const inGAS=typeof google!=='undefined'&&google.script&&google.script.run;
 const call=(fn,...a)=>inGAS
   ?new Promise((ok,no)=>google.script.run.withSuccessHandler(ok).withFailureHandler(no)[fn](...a))
