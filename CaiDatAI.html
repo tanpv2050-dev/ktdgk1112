@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="vi"><head><base target="_top"><meta charset="utf-8">
+<style>
+*{box-sizing:border-box}body{margin:0;padding:14px;font:14px/1.5 system-ui,"Segoe UI",Roboto,Arial,sans-serif;color:#1c2230}
+label{display:block;font-weight:600;margin:12px 0 4px}input[type=text],input[type=password],input[type=number]{width:100%;font:inherit;padding:8px 10px;border:1px solid #d6dbe8;border-radius:8px}
+.opt{display:flex;gap:8px;align-items:flex-start;margin:6px 0;padding:8px 10px;border:1px solid #d6dbe8;border-radius:10px;cursor:pointer;font-weight:400}.opt input{margin-top:4px}.opt b{display:block}
+button{font:inherit;cursor:pointer;border:1px solid #d6dbe8;background:#fff;border-radius:8px;padding:7px 12px}button.p{background:#2563eb;color:#fff;border-color:#2563eb;font-weight:600}button:disabled{opacity:.5}
+.mu{color:#5d667a;font-size:.85rem}.err{color:#dc2626;font-weight:600}.ok{color:#16a34a;font-weight:600}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
+.box{background:#f4f6fb;border-radius:10px;padding:8px 12px;margin-bottom:8px}
+</style></head><body>
+<div class="box" id="st">Đang tải…</div>
+<label>Chế độ chấm</label>
+<label class="opt"><input type="radio" name="che" value="tat"><span><b>Tắt</b>Không dùng AI.</span></label>
+<label class="opt"><input type="radio" name="che" value="de_xuat"><span><b>AI đề xuất điểm – giáo viên duyệt (khuyên dùng)</b>AI chấm sẵn kèm tiêu chí; giáo viên xem, bấm "Dùng điểm AI" hoặc sửa. Học sinh chỉ thấy điểm sau khi giáo viên duyệt và công bố.</span></label>
+<label class="opt"><input type="radio" name="che" value="tu_dong"><span><b>AI chấm tự động</b>Điểm AI là điểm chính thức, trừ bài AI không chắc chắn (ảnh mờ, độ tin cậy thấp, có dấu hiệu chèn lệnh) – các bài đó chờ giáo viên. Học sinh vẫn chỉ thấy điểm sau khi bạn bấm "Công bố".</span></label>
+<label>Khoá API Claude (lưu riêng trong Script Properties, không nằm trong Sheets)</label>
+<input type="password" id="k" autocomplete="off" placeholder="sk-ant-…">
+<div class="mu" id="kh"></div>
+<label>Mô hình</label><input type="text" id="md">
+<div class="mu">Mô hình mạnh chấm chính xác hơn; mô hình nhỏ rẻ và nhanh hơn. Nên thử vài bài rồi so với điểm giáo viên.</div>
+<label>Môn học (giúp AI hiểu ngữ cảnh, ví dụ: Tin học 12)</label><input type="text" id="mon">
+<label>Độ tin cậy tối thiểu để AI tự chấm: <span id="tv"></span></label><input type="range" id="tin" min="0.5" max="0.95" step="0.05" style="width:100%">
+<label class="opt"><input type="checkbox" id="hien"><span><b>Cho học sinh xem chi tiết chấm của AI</b>Điểm từng tiêu chí, ưu điểm, điểm cần cải thiện và hướng dẫn giải chi tiết (hướng dẫn giải chỉ hiện khi CauHinh!HienDapAn = TRUE).</span></label>
+<div class="row"><button class="p" id="s">Lưu cài đặt</button><button id="t">Kiểm tra kết nối AI</button></div>
+<div class="row"><button id="tr"></button><button id="run">Chạy AI chấm các bài đang chờ</button></div>
+<p id="m"></p>
+<div class="mu">Lưu ý quyền riêng tư: nội dung bài làm (chữ và ảnh) được gửi tới nhà cung cấp AI để chấm; hệ thống KHÔNG gửi họ tên, lớp, mã học sinh. Hãy bảo đảm phù hợp quy định của nhà trường, và không chụp thông tin cá nhân vào ảnh bài làm. AI có thể sai – nên để giáo viên duyệt.</div>
+<script>
+const KEY=<?!= JSON.stringify(KEY) ?>;const $=id=>document.getElementById(id);
+const gv=(fn,...a)=>new Promise((ok,no)=>google.script.run.withSuccessHandler(ok).withFailureHandler(e=>no(new Error(e&&e.message||String(e))))[fn](KEY,...a));
+const msg=(t,c)=>{$('m').className=c||'';$('m').textContent=t};
+let C=null;
+function ve(c){C=c;document.querySelectorAll('[name=che]').forEach(r=>r.checked=r.value===c.che);$('md').value=c.model;$('mon').value=c.mon;$('tin').value=c.tin;$('tv').textContent=Math.round(c.tin*100)+'%';$('hien').checked=c.hien;
+ $('kh').textContent=c.coKhoa?'Đã có khoá API (để trống ô trên nếu không đổi).':'Chưa có khoá API.';
+ $('tr').textContent=c.trigger?'Tắt tự chạy mỗi phút':'Bật tự chạy mỗi phút';
+ const d=c.dem;$('st').textContent='Hàng đợi: chờ '+d.cho+' · đang chấm '+d.dang+' · lỗi '+d.loi+' · AI đã chấm '+d.xong+' (chờ giáo viên duyệt '+d.choDuyet+', cần xem kỹ '+d.canXem+') · Tự chạy mỗi phút: '+(c.trigger?'BẬT':'tắt')}
+const tai=()=>gv('gv_aiLayCauHinh').then(ve).catch(e=>msg(e.message,'err'));tai();
+$('tin').oninput=()=>$('tv').textContent=Math.round($('tin').value*100)+'%';
+$('s').onclick=()=>{$('s').disabled=true;gv('gv_aiLuuCauHinh',{che:document.querySelector('[name=che]:checked').value,model:$('md').value,mon:$('mon').value,tin:$('tin').value,hien:$('hien').checked,apiKey:$('k').value}).then(r=>{msg(r.ok,'ok');$('k').value='';tai()}).catch(e=>msg(e.message,'err')).finally(()=>$('s').disabled=false)};
+$('t').onclick=()=>{msg('Đang kiểm tra…');gv('gv_aiKiemTra').then(r=>msg(r.ok,'ok')).catch(e=>msg(e.message,'err'))};
+$('tr').onclick=()=>gv('gv_aiTrigger',!C.trigger).then(()=>tai()).catch(e=>msg(e.message,'err'));
+$('run').onclick=async()=>{$('run').disabled=true;try{let lai=true,tong=0;for(let i=0;i<30;i++){msg('AI đang chấm… (đã xong '+tong+' bài)');const r=await gv('gv_aiChay',lai);lai=false;if(r.loiHeThong){msg(r.loiHeThong,'err');break}tong+=r.xong;if(r.fatal){msg(r.fatal,'err');break}if(r.dangChay){msg('AI đang chạy ở tiến trình khác, đợi…');await new Promise(z=>setTimeout(z,5000));continue}if(!r.cho&&!r.dang)break}msg('Hoàn tất lượt chạy (đã xong '+tong+' bài).','ok')}catch(e){msg(e.message,'err')}finally{$('run').disabled=false;tai()}};
+</script></body></html>

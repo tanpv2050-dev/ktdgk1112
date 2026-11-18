@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="vi"><head><base target="_top"><meta charset="utf-8">
+<style>
+:root{--bg:#f4f6fb;--fg:#1c2230;--card:#fff;--mu:#5d667a;--ac:#2563eb;--ok:#16a34a;--wa:#d97706;--wab:#fef3c7;--okb:#dcfce7;--bd:#d6dbe8}
+*{box-sizing:border-box}body{margin:0;padding:10px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,"Segoe UI",Roboto,Arial,sans-serif}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;margin:8px 0}.cham{border-left:5px solid var(--wa)}.cham.xong{border-left-color:var(--ok)}
+.mu{color:var(--mu);font-size:.85rem}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.g{flex:1 1 160px}.bar{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+input,select{font:inherit;padding:7px 9px;border:1px solid var(--bd);border-radius:8px;background:#fff;color:var(--fg)}
+button{font:inherit;cursor:pointer;border:1px solid var(--bd);background:#fff;border-radius:8px;padding:6px 11px}button.p{background:var(--ac);color:#fff;border-color:var(--ac);font-weight:600}button:disabled{opacity:.5}
+.chip{display:inline-block;padding:0 9px;border-radius:999px;font-size:.75rem;font-weight:700}.chip.wa{background:var(--wab);color:var(--wa)}.chip.ok{background:var(--okb);color:var(--ok)}
+.ans{white-space:pre-wrap;padding:8px 10px;border:1px solid var(--bd);border-radius:8px;background:#f8f9fd;max-height:300px;overflow:auto}
+.th{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0}.th img{height:130px;border-radius:8px;border:1px solid var(--bd);cursor:zoom-in}.ld{height:90px;min-width:120px;display:flex;align-items:center;justify-content:center;border:1px dashed var(--bd);border-radius:8px;cursor:pointer}
+.sc2{width:80px}.lb{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:50;display:flex;align-items:center;justify-content:center;cursor:zoom-out}.lb img{max-width:96vw;max-height:96vh}.hide{display:none!important}
+.ai{border:1px solid #c7d2fe;background:#eef2ff;border-radius:10px;padding:8px 10px;margin:8px 0}.ai ul{margin:4px 0 4px 18px;padding:0}.warn{color:#b45309;font-weight:600}.chip.ai{background:#e0e7ff;color:#3730a3}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:14px;background:#1c2230;color:#fff;padding:8px 16px;border-radius:999px;z-index:60}
+</style></head><body>
+<div class="bar"><b>Chấm bài tự luận</b><div class="row"><span id="cb" class="chip"></span><button id="bcb"></button><button id="bai" title="Chạy AI chấm các bài đang chờ">🤖 AI chấm ngay</button><button id="bduyet" title="Nhận điểm AI cho các bài AI chắc chắn">✔ Duyệt hàng loạt điểm AI</button></div></div>
+<div class="card"><div class="row">
+  <select class="g" id="cQ"></select>
+  <select id="cL"><option value="cho">Chưa có điểm chính thức</option><option value="ai">AI đã đề xuất – chờ duyệt</option><option value="xem">AI báo cần giáo viên xem</option><option value="da">Đã có điểm</option><option value="tat">Tất cả</option></select>
+  <input id="cK" placeholder="Tìm tên / mã / lớp"><button id="cRe">↻ Tải</button></div>
+  <div class="mu" id="cSum" style="margin-top:6px"></div></div>
+<div id="cList"></div><div class="row"><button id="cMore" class="hide">Xem thêm</button></div>
+<div id="lbx" class="lb hide"><img alt=""></div><div id="toast" class="toast hide"></div>
+<script>
+const KEY=<?!= JSON.stringify(KEY) ?>;
+const $=id=>document.getElementById(id);
+const gv=(fn,...a)=>new Promise((ok,no)=>google.script.run.withSuccessHandler(ok).withFailureHandler(e=>no(new Error(e&&e.message||String(e))))[fn](KEY,...a));
+const el=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e};
+const fmt=x=>x==null?'':String(Math.round(x*100)/100).replace('.',',');
+let off=0,tt=null;const imgC={};
+const toast=(t)=>{const b=$('toast');b.textContent=t;b.classList.remove('hide');clearTimeout(tt);tt=setTimeout(()=>b.classList.add('hide'),3500)};
+const loi=e=>toast((e&&e.message)||'Lỗi');
+function cong(c){$('cb').className='chip '+(c?'ok':'wa');$('cb').textContent=c?'Đã công bố cho học sinh':'Chưa công bố';$('bcb').textContent=c?'Thu hồi công bố':'Công bố điểm tự luận';$('bcb').dataset.c=c?1:0}
+gv('gv_thongTin').then(r=>cong(r.cong)).catch(loi);
+$('bcb').onclick=()=>{const c=$('bcb').dataset.c==='1';if(!c&&!confirm('Công bố: học sinh sẽ thấy điểm tổng và nhận xét tự luận. Đã chấm xong chưa?'))return;gv('gv_datCongBo',!c).then(r=>cong(r.cong)).catch(loi)};
+function tai(reset){
+  if(reset){off=0;$('cList').textContent=''}
+  gv('gv_dsBai',{qid:$('cQ').value,loc:$('cL').value,tuKhoa:$('cK').value,offset:off,limit:20}).then(r=>{
+    const sel=$('cQ'),cur=sel.value;
+    if(sel.options.length<=1||reset&&sel.dataset.n!==String(r.cauTL.length)){sel.textContent='';sel.appendChild(Object.assign(el('option',null,'Tất cả câu tự luận'),{value:''}));r.cauTL.forEach(q=>sel.appendChild(Object.assign(el('option',null,q.id+' – '+q.text.slice(0,70)+' ('+fmt(q.max)+'đ)'),{value:q.id})));sel.value=cur;sel.dataset.n=r.cauTL.length}
+    off+=r.ds.length;$('cSum').textContent='Bài tự luận đã nộp: '+r.tong+' · chưa có điểm chính thức: '+r.cho+' · AI đã đề xuất chờ duyệt: '+r.choDuyet+' · cần xem kỹ: '+r.canXem+' · khớp bộ lọc: '+r.khop;
+    r.ds.forEach(the);$('cMore').classList.toggle('hide',off>=r.khop);
+    if(reset&&!r.ds.length)$('cList').appendChild(el('div','card mu','Không có bài nào cần hiển thị.'));
+  }).catch(loi)}
+function the(it){
+  const c=el('div','card cham'+(it.diem!=null?' xong':'')),h=el('div','bar'),l=el('div');
+  l.append(el('b',null,it.hoTen),el('span','mu',' · '+it.lop+' · '+it.maHS+' · đề '+it.maDe+' · câu '+it.stt+' ('+it.qid+')'));
+  const st=el('span','chip '+(it.diem!=null?'ok':'wa'),it.diem!=null?'Đã chấm'+(it.nguoi?' ('+it.nguoi+')':''):'Chưa chấm');h.append(l,st);c.appendChild(h);
+  const dt=el('details');dt.appendChild(el('summary',null,'Đề bài và đáp án mẫu'));dt.appendChild(el('div','ans',it.cauHoi));if(it.hd){const g=el('div','ans','Đáp án mẫu / thang điểm:\n'+it.hd);g.style.marginTop='6px';dt.appendChild(g)}c.appendChild(dt);
+  c.appendChild(el('div','mu','Bài làm ('+it.soTu+' từ):'));c.appendChild(el('div','ans',it.text||'(không có chữ)'));
+  if(it.im.length){const th=el('div','th');it.im.forEach(id=>{const s=el('div','ld','📷 Bấm để xem ảnh');
+    const lay=()=>{s.textContent='Đang tải…';(imgC[id]?Promise.resolve(imgC[id]):gv('gv_anh',id).then(r=>imgC[id]=r.url)).then(u=>{const im=el('img');im.src=u;im.alt='Ảnh bài làm';im.onclick=()=>{$('lbx').firstElementChild.src=u;$('lbx').classList.remove('hide')};s.replaceWith(im)}).catch(()=>{s.textContent='Lỗi – bấm để thử lại'})};
+    s.onclick=lay;th.appendChild(s);lay()});c.appendChild(th)}
+  let aiBox=null;
+  if(it.ai){aiBox=el('div','ai');const a=it.ai;
+    if(a.tt==='xong'){const tin=a.ct&&a.ct.tin!=null?Math.round(a.ct.tin*100)+'%':'';
+      aiBox.appendChild(el('b',null,'🤖 AI đề xuất: '+fmt(a.diem)+' / '+fmt(it.max)+(tin?' (độ tin cậy '+tin+')':'')));
+      if(a.ghiChu)aiBox.appendChild(el('div','warn',a.ghiChu));
+      if(a.ct&&a.ct.tieuChi&&a.ct.tieuChi.length){const u=el('ul');a.ct.tieuChi.forEach(t=>u.appendChild(el('li',null,t.ten+': '+fmt(t.diem)+'/'+fmt(t.max)+(t.nx?' – '+t.nx:''))));aiBox.appendChild(u)}
+      if(a.nx)aiBox.appendChild(el('div',null,'Nhận xét: '+a.nx));
+      if(a.ct&&a.ct.cai&&a.ct.cai.length)aiBox.appendChild(el('div','mu','Cần cải thiện: '+a.ct.cai.join('; ')));
+      if(a.ct&&a.ct.loiGiai){const d2=el('details');d2.appendChild(el('summary',null,'Hướng dẫn giải chi tiết (AI)'));d2.appendChild(el('div','ans',a.ct.loiGiai));aiBox.appendChild(d2)}
+    }else if(a.tt==='loi'){aiBox.appendChild(el('span','warn','AI gặp lỗi: '+a.ghiChu+' '));}
+    else aiBox.appendChild(el('span','mu','🤖 AI đang '+(a.tt==='dang'?'chấm…':'chờ đến lượt…')));
+    const rb=el('button',null,a.tt==='loi'?'Thử lại':'AI chấm lại');rb.style.marginLeft='8px';
+    rb.onclick=()=>{rb.disabled=true;gv('gv_aiChamLai',it.token,it.qid).then(r=>{toast(r.ok)}).catch(loi).finally(()=>rb.disabled=false)};aiBox.appendChild(rb);
+    c.appendChild(aiBox);
+    if(it.nguoi==='AI')st.append(' ',el('span','chip ai','AI chấm'))}
+  const f=el('div','row');f.style.marginTop='8px';
+  const sc=el('input','sc2');sc.type='number';sc.min=0;sc.max=it.max;sc.step=0.25;sc.value=it.diem==null?'':it.diem;sc.placeholder='Điểm';
+  const bAI=(it.ai&&it.ai.tt==='xong'&&it.ai.diem!=null)?el('button',null,'Dùng điểm AI'):null;if(bAI)bAI.onclick=()=>{sc.value=it.ai.diem;if(!nx.value)nx.value=it.ai.nx||''};
+  const q0=el('button',null,'0'),q5=el('button',null,'½'),q1=el('button',null,'Tối đa');q0.onclick=()=>sc.value=0;q5.onclick=()=>sc.value=it.max/2;q1.onclick=()=>sc.value=it.max;
+  const nx=el('input','g');nx.placeholder='Nhận xét cho học sinh (không bắt buộc)';nx.value=it.nx||'';nx.maxLength=2000;
+  const sv=el('button','p',it.diem==null?'Lưu điểm':'Cập nhật');
+  const save=()=>{if(sc.value===''){toast('Hãy nhập điểm.');return}sv.disabled=true;
+    gv('gv_cham',[{token:it.token,qid:it.qid,diem:sc.value,nx:nx.value,duyetAI:!!(it.ai&&it.ai.tt==='xong')}]).then(r=>{if(r.loi.length){toast(r.loi[0]);return}
+      it.diem=Number(sc.value);c.classList.add('xong');st.className='chip ok';st.textContent='Đã chấm';sv.textContent='Cập nhật';toast('Đã lưu.');if($('cL').value==='cho')c.style.opacity='.55'}).catch(loi).finally(()=>sv.disabled=false)};
+  sv.onclick=save;sc.onkeydown=nx.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();save()}};
+  if(bAI)f.append(bAI);f.append(sc,el('span','mu','/ '+fmt(it.max)),q0,q5,q1,nx,sv);c.appendChild(f);$('cList').appendChild(c)}
+$('cRe').onclick=()=>tai(true);$('cQ').onchange=$('cL').onchange=()=>tai(true);$('cK').onkeydown=e=>{if(e.key==='Enter')tai(true)};$('cMore').onclick=()=>tai(false);$('lbx').onclick=()=>$('lbx').classList.add('hide');
+$('bai').onclick=async()=>{$('bai').disabled=true;try{let lai=true,tong=0;for(let i=0;i<30;i++){toast('AI đang chấm… (xong '+tong+' bài)');const r=await gv('gv_aiChay',lai);lai=false;if(r.loiHeThong){toast(r.loiHeThong);break}tong+=r.xong;if(r.fatal){toast(r.fatal);break}if(r.dangChay){await new Promise(z=>setTimeout(z,5000));continue}if(!r.cho&&!r.dang)break}toast('AI đã chấm xong '+tong+' bài.');tai(true)}catch(e){loi(e)}finally{$('bai').disabled=false}};
+$('bduyet').onclick=()=>{if(!confirm('Nhận điểm AI làm điểm chính thức cho mọi bài AI đã chấm với độ tin cậy cao (bỏ qua các bài AI báo cần xem kỹ)?'))return;gv('gv_aiDuyetHet').then(r=>{toast('Đã duyệt '+r.so+' bài.');tai(true)}).catch(loi)};
+tai(true);
+</script></body></html>

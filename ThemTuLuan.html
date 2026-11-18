@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="vi"><head><base target="_top"><meta charset="utf-8">
+<style>
+*{box-sizing:border-box}body{margin:0;padding:14px;font:14px/1.5 system-ui,"Segoe UI",Roboto,Arial,sans-serif;color:#1c2230}
+label{display:block;font-weight:600;margin:10px 0 4px}input,textarea{width:100%;font:inherit;padding:8px 10px;border:1px solid #d6dbe8;border-radius:8px}textarea{min-height:90px;resize:vertical}
+.g{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}.chk{display:flex;gap:14px;flex-wrap:wrap;margin-top:4px}.chk label{font-weight:400;margin:0;display:flex;gap:5px;align-items:center}
+button{font:inherit;cursor:pointer;border:1px solid #d6dbe8;background:#fff;border-radius:8px;padding:8px 14px}button.p{background:#2563eb;color:#fff;border-color:#2563eb;font-weight:600}
+.mu{color:#5d667a;font-size:.85rem}.err{color:#dc2626;font-weight:600}.ok{color:#16a34a;font-weight:600}input[type=checkbox]{width:auto}
+</style></head><body>
+<label>Nội dung câu hỏi</label><textarea id="text" style="min-height:120px"></textarea>
+<div class="g"><div><label>Bài (số)</label><input id="bai" type="number" min="1" value="1"></div><div><label>Điểm tối đa</label><input id="diem" type="number" min="0.25" step="0.25" value="1"></div><div><label>Giới hạn ký tự</label><input id="gh" type="number" min="100" max="20000" value="3000"></div></div>
+<label><input type="checkbox" id="anh" checked> Cho học sinh đính kèm ảnh bài viết tay (tối đa 3 ảnh)</label>
+<label>Đáp án mẫu / thang điểm (chỉ giáo viên thấy khi chấm)</label><textarea id="hd" placeholder="Ý 1 (1,0 đ): …&#10;Ý 2 (1,5 đ): …"></textarea>
+<label>Đưa vào các mã đề</label><div class="chk" id="de"><span class="mu">Đang tải…</span></div>
+<div class="mu">Không chọn đề nào thì câu chỉ được thêm vào ngân hàng; sau đó tự thêm dòng vào sheet DeThi.</div>
+<p id="m"></p><p><button class="p" id="s">Thêm câu hỏi</button> <button onclick="google.script.host.close()">Đóng</button></p>
+<script>
+const KEY=<?!= JSON.stringify(KEY) ?>;const $=id=>document.getElementById(id);
+const gv=(fn,...a)=>new Promise((ok,no)=>google.script.run.withSuccessHandler(ok).withFailureHandler(e=>no(new Error(e&&e.message||String(e))))[fn](KEY,...a));
+gv('gv_thongTin').then(r=>{const d=$('de');d.textContent='';if(!r.maDe.length)d.textContent='(chưa có mã đề nào trong sheet DeThi)';r.maDe.forEach(m=>{const l=document.createElement('label'),c=document.createElement('input');c.type='checkbox';c.value=m;c.checked=true;l.append(c,' Đề '+m);d.appendChild(l)})});
+$('s').onclick=()=>{$('m').textContent='';$('m').className='';$('s').disabled=true;
+  gv('gv_themCauTL',{text:$('text').value,bai:$('bai').value,diem:$('diem').value,gh:$('gh').value,anh:$('anh').checked,hd:$('hd').value,maDe:[...document.querySelectorAll('#de input:checked')].map(x=>x.value)})
+   .then(r=>{$('m').className='ok';$('m').textContent=r.ok;$('text').value='';$('hd').value=''}).catch(e=>{$('m').className='err';$('m').textContent=e.message}).finally(()=>$('s').disabled=false)};
+</script></body></html>
