@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="vi"><head><base target="_top"><meta charset="utf-8">
+<style>
+*{box-sizing:border-box}body{margin:0;padding:14px;font:14px/1.5 system-ui,"Segoe UI",Roboto,Arial,sans-serif;color:#1c2230}
+input,select,textarea{font:inherit;padding:5px 8px;border:1px solid #d6dbe8;border-radius:8px}
+button{font:inherit;cursor:pointer;border:1px solid #d6dbe8;background:#fff;border-radius:8px;padding:7px 14px}button.p{background:#2563eb;color:#fff;border-color:#2563eb;font-weight:600}button:disabled{opacity:.5}
+.mu{color:#5d667a;font-size:.85rem}.err{color:#dc2626;font-weight:600}.ok{color:#16a34a;font-weight:600}
+.bar{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin:8px 0}.bar label{display:block;font-weight:600;font-size:.85rem}
+.q{border:1px solid #d6dbe8;border-radius:10px;padding:8px 10px;margin:8px 0}.q.w{border-color:#f59e0b;background:#fffbeb}.q.x{opacity:.45}
+.q .h{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.q .t{white-space:pre-wrap;margin:4px 0}.op{display:flex;gap:6px;align-items:baseline;padding:2px 6px;border-radius:6px}.op.c{background:#dcfce7;font-weight:600}
+.wn{color:#b45309;font-size:.85rem}.sum{background:#eef2ff;border-radius:8px;padding:8px 10px}
+</style></head><body>
+<div class="bar">
+ <div><label>Chọn file Word (.docx)</label><input type="file" id="f" accept=".docx"></div>
+ <div><label>Mã đề</label><input id="md" size="8" placeholder="vd: 101"></div>
+ <div><label>Bài (số)</label><input id="bai" type="number" min="1" value="1" style="width:70px"></div>
+</div>
+<div class="mu">Đáp án đúng được nhận diện theo <b>chữ tô màu</b> (đỏ, xanh…; chữ đen/xám không tính): trắc nghiệm = phương án tô màu · đúng/sai = ý nào tô màu là <b>Đúng</b>, ý không tô màu là <b>Sai</b>. Kiểm tra bảng xem trước rồi mới bấm Lưu.</div>
+<p id="m"></p><div id="sum"></div><div id="ls"></div>
+<p id="act" style="display:none"><button class="p" id="s">Lưu vào ngân hàng &amp; đề thi</button> <span class="mu">Điểm mỗi câu (để trống = mặc định): TN <input id="dTN" size="3" placeholder="0,25"> Đ/S <input id="dDS" size="3" placeholder="1"> TL <input id="dTL" size="3" placeholder="1"></span> <button onclick="google.script.host.close()">Đóng</button></p>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+const KEY=<?!= JSON.stringify(KEY) ?>;
+const $=id=>document.getElementById(id);
+const gv=(fn,...a)=>new Promise((ok,no)=>google.script.run.withSuccessHandler(ok).withFailureHandler(e=>no(new Error(e&&e.message||String(e))))[fn](KEY,...a));
+
+/* ================= PHÂN TÍCH FILE WORD ================= */
+const W='http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+function mauCoY(r){   // run có tô màu chữ / nền nổi bật? (đen, xám, trắng, auto thì không tính)
+  const pr=r.getElementsByTagNameNS(W,'rPr')[0];if(!pr)return false;
+  const c=pr.getElementsByTagNameNS(W,'color')[0];
+  if(c){const v=(c.getAttributeNS(W,'val')||'').toLowerCase();
+    if(v&&v!=='auto'&&/^[0-9a-f]{6}$/.test(v)){const R=parseInt(v.substr(0,2),16),G=parseInt(v.substr(2,2),16),B=parseInt(v.substr(4,2),16);
+      if(Math.max(R,G,B)-Math.min(R,G,B)>40)return true;}}   // đủ "sặc sỡ"; xám/đen/trắng bỏ qua
+  const h=pr.getElementsByTagNameNS(W,'highlight')[0];
+  if(h){const v=(h.getAttributeNS(W,'val')||'').toLowerCase();if(v&&v!=='none'&&v!=='white')return true}
+  return false;
+}
+/* Một đoạn -> {t: văn bản, m: mảng cờ tô màu từng ký tự, ext: có hình/công thức} */
+function docDoan(p){
+  let t='',m=[],ext=false;
+  const walk=n=>{
+    for(const c of n.childNodes){
+      if(c.nodeType!==1)continue;const ln=c.localName;
+      if(ln==='r'){const col=mauCoY(c);
+        for(const x of c.childNodes){if(x.nodeType!==1)continue;
+          if(x.localName==='t'){for(const ch of x.textContent){t+=ch;m.push(col)}}
+          else if(x.localName==='tab'){t+=' ';m.push(false)}
+          else if(x.localName==='br'){t+='\n';m.push(false)}
+          else if(['drawing','pict','object'].includes(x.localName)){ext=true}}}
+      else if(ln==='oMath'||ln==='oMathPara'){ext=true;const s=c.textContent;for(const ch of s){t+=ch;m.push(false)}}
+      else if(['hyperlink','smartTag','sdt','sdtContent','ins','fldSimple'].includes(ln))walk(c);
+    }};
+  walk(p);return{t,m,ext};
+}
+/* Duyệt thân tài liệu theo thứ tự -> danh sách "dòng" (đoạn văn, ô bảng) */
+function docDong(xml){
+  const doc=new DOMParser().parseFromString(xml,'application/xml');const out=[];
+  const body=doc.getElementsByTagNameNS(W,'body')[0];
+  const doanTrong=el=>{for(const c of el.childNodes){if(c.nodeType!==1)continue;
+    if(c.localName==='p')out.push(docDoan(c));
+    else if(c.localName==='tbl'){for(const tr of c.childNodes){if(tr.localName!=='tr')continue;for(const tc of tr.childNodes){if(tc.localName==='tc')doanTrong(tc)}}}
+    else if(c.localName==='sdt'){for(const k of c.childNodes)if(k.localName==='sdtContent')doanTrong(k)}}};
+  doanTrong(body);return out;
+}
+/* Cắt một dòng thành các phần theo nhãn phương án (A. B. C. D. hoặc a) b) c) d)) */
+function cat(d,re){   // re: regex toàn cục bắt nhãn; trả về [{nhan, t, m}]
+  const pos=[];let x;re.lastIndex=0;
+  while((x=re.exec(d.t))!==null)pos.push({i:x.index+x[0].indexOf(x[1]),k:x[1]});
+  if(!pos.length)return null;
+  const out=[];
+  pos.forEach((p,j)=>{const e=j+1<pos.length?pos[j+1].i:d.t.length;out.push({nhan:p.k,t:d.t.slice(p.i,e),m:d.m.slice(p.i,e)})});
+  return{truoc:{t:d.t.slice(0,pos[0].i),m:d.m.slice(0,pos[0].i)},phan:out};
+}
+const coMau=(t,m)=>{ // có chữ (không phải khoảng trắng / chú thích dạng "(H.Đ)") được tô màu
+  for(let i=0;i<t.length;i++)if(m[i]&&/\S/.test(t[i]))return true;return false};
+const lamSach=t=>t.replace(/\((?:H\.?\s*Đ|HĐ|Đ\.?A)\)/gi,'').replace(/\s+/g,' ').trim();
+
+function phanTich(dong){
+  const qs=[];let mode=null,cur=null;
+  const dongCau=()=>{if(cur){kiemTra(cur);qs.push(cur);cur=null}};
+  const reQ=/^\s*(?:Câu|CÂU|Bài)\s*(\d+)\s*[.:)]\s*/;
+  const rePart=/^\s*PHẦN\s+(I{1,3}|[1-3])\b/i;
+  const reTN=/(?:^|\s)([A-D])[.)]\s/g, reDS=/(?:^|\s)([a-d])\)\s?/g;
+  dong.forEach(d=>{
+    const t=d.t;if(!t.trim()&&!d.ext)return;
+    const pm=rePart.exec(t);
+    if(pm){dongCau();const v=pm[1].toUpperCase();mode=(v==='I'||v==='1')?'TN':(v==='II'||v==='2')?'DS':'TL';
+      if(/đúng hoặc sai|đúng\/sai/i.test(t))mode='DS';else if(/tự luận/i.test(t))mode='TL';return}
+    const qm=reQ.exec(t);
+    if(qm){dongCau();cur={so:Number(qm[1]),loai:mode||'?',text:'',opts:[],ms:[],ext:false,tn:[],ds:[],warn:[],hd:''};
+      const rest={t:t.slice(qm[0].length),m:d.m.slice(qm[0].length)};
+      cur.ext=d.ext;nap(cur,rest,reTN,reDS);return}
+    if(cur){cur.ext=cur.ext||d.ext;nap(cur,d,reTN,reDS)}
+  });
+  dongCau();return qs;
+}
+function nap(q,d,reTN,reDS){
+  const t=d.t.replace(/^\s+/,'');const lead=d.t.length-t.length;const dd={t:t,m:d.m.slice(lead)};
+  const ctn=(q.loai!=='DS')?cat(dd,reTN):null;
+  if(ctn&&(q.tn.length||/^[A-D][.)]\s/.test(dd.t)||ctn.phan.length>=2)){
+    if(ctn.truoc.t.trim()){if(!q.tn.length)q.text+=(q.text?'\n':'')+lamSach(ctn.truoc.t)}
+    ctn.phan.forEach(p=>q.tn.push({k:p.nhan,t:lamSach(p.t.replace(/^[A-D][.)]\s*/,'')),c:coMau(p.t,p.m)}));return}
+  const cds=(q.loai!=='TN')?cat(dd,reDS):null;
+  if(cds&&(q.ds.length||/^[a-d]\)\s?/.test(dd.t)||cds.phan.length>=2)&&!q.tn.length){
+    if(cds.truoc.t.trim()&&!q.ds.length)q.text+=(q.text?'\n':'')+lamSach(cds.truoc.t);
+    cds.phan.forEach(p=>q.ds.push({k:p.nhan,t:lamSach(p.t.replace(/^[a-d]\)\s*/,'')),c:coMau(p.t,p.m)}));return}
+  // dòng thường: tiếp nối đề bài (hoặc tiếp nối phương án cuối nếu đã có phương án)
+  const s=lamSach(dd.t);if(!s)return;
+  if(q.tn.length&&!/^\s*(Hướng dẫn|Đáp án)/i.test(s))q.tn[q.tn.length-1].t+=' '+s;
+  else if(q.ds.length)q.ds[q.ds.length-1].t+=' '+s;
+  else q.text+=(q.text?'\n':'')+s;
+}
+function kiemTra(q){
+  if(q.tn.length>=2){q.loai='TN';const ks=q.tn.map(o=>o.k).join('');
+    q.opts=q.tn.map(o=>o.t);const dung=q.tn.filter(o=>o.c).map(o=>o.k);
+    if(ks!=='ABCD'&&ks!=='ABC'&&ks!=='ABCDE')q.warn.push('Các phương án nhận được: '+ks+' (cần A, B, C, D).');
+    if(q.opts.length>4)q.warn.push('Hơn 4 phương án — hệ thống chỉ hỗ trợ 4.');
+    q.ans=dung.length===1?dung[0]:'';
+    if(!dung.length)q.warn.push('Không có phương án nào tô màu — hãy chọn đáp án.');
+    if(dung.length>1)q.warn.push('Có '+dung.length+' phương án tô màu ('+dung.join(', ')+') — hãy chọn lại một đáp án.');
+  }else if(q.ds.length){q.loai='DS';
+    const ks=q.ds.map(o=>o.k).join('');if(ks!=='abcd')q.warn.push('Các ý nhận được: '+ks+' (cần a, b, c, d).');
+    q.opts=q.ds.slice(0,4).map(o=>o.t);q.ans=q.ds.slice(0,4).map(o=>o.c?'D':'S').join('');
+    if(!q.ds.some(o=>o.c))q.warn.push('Không có ý nào tô màu — đang để tất cả là Sai, hãy kiểm tra lại.');
+  }else{q.loai='TL';q.opts=[];q.ans=''}
+  if(q.ext)q.warn.push('Câu có hình ảnh / công thức — hệ thống chỉ nhập phần chữ, hãy bổ sung thủ công nếu cần.');
+  if(!q.text.trim())q.warn.push('Thiếu nội dung câu hỏi.');
+  q.text=q.text.trim();q.bai=null;
+  const m=/\((\d+(?:[.,]\d+)?)\s*điểm\)/i.exec(q.text);if(m){q.diem=Number(m[1].replace(',','.'))}
+  delete q.tn;delete q.ds;
+}
+
+/* ================= GIAO DIỆN XEM TRƯỚC ================= */
+let QS=[];
+function ve(){
+  const ls=$('ls');ls.textContent='';
+  const dem={TN:0,DS:0,TL:0,w:0};
+  QS.forEach((q,i)=>{if(q.bo)return;dem[q.loai]++;if(canhBao(q).length)dem.w++});
+  $('sum').innerHTML='<div class="sum">Nhận được <b>'+dem.TN+'</b> câu trắc nghiệm · <b>'+dem.DS+'</b> câu đúng/sai · <b>'+dem.TL+'</b> câu tự luận'+(dem.w?' · <span class="wn">⚠ '+dem.w+' câu cần kiểm tra</span>':' · <span class="ok">không có cảnh báo</span>')+'</div>';
+  QS.forEach((q,i)=>{
+    const ws=canhBao(q);const d=document.createElement('div');d.className='q'+(ws.length?' w':'')+(q.bo?' x':'');
+    const h=document.createElement('div');h.className='h';
+    const b=document.createElement('b');b.textContent='Câu '+q.so+' · '+({TN:'Trắc nghiệm',DS:'Đúng/Sai',TL:'Tự luận'}[q.loai]);h.appendChild(b);
+    if(q.loai==='TN'){const s=document.createElement('select');s.innerHTML='<option value="">— chọn đáp án —</option>'+['A','B','C','D'].map(k=>'<option>'+k+'</option>').join('');s.value=q.ans||'';s.onchange=()=>{q.ans=s.value;ve()};h.append(' Đáp án: ',s)}
+    const x=document.createElement('button');x.textContent=q.bo?'Khôi phục':'Bỏ câu này';x.onclick=()=>{q.bo=!q.bo;ve()};h.appendChild(x);
+    d.appendChild(h);
+    const t=document.createElement('div');t.className='t';t.textContent=q.text;d.appendChild(t);
+    if(q.loai==='TN')q.opts.forEach((o,k)=>{const r=document.createElement('div');r.className='op'+('ABCD'[k]===q.ans?' c':'');r.textContent='ABCD'[k]+'. '+o+('ABCD'[k]===q.ans?'  ✓':'');d.appendChild(r)});
+    if(q.loai==='DS')q.opts.forEach((o,k)=>{const r=document.createElement('div');r.className='op'+(q.ans[k]==='D'?' c':'');
+      const s=document.createElement('select');s.innerHTML='<option value="D">Đúng</option><option value="S">Sai</option>';s.value=q.ans[k]||'S';
+      s.onchange=()=>{const a=q.ans.split('');a[k]=s.value;q.ans=a.join('');ve()};r.append(s,' '+'abcd'[k]+') '+o);d.appendChild(r)});
+    ws.forEach(w=>{const e=document.createElement('div');e.className='wn';e.textContent='⚠ '+w;d.appendChild(e)});
+    ls.appendChild(d)});
+  $('act').style.display=QS.length?'block':'none';
+}
+function canhBao(q){const w=q.warn.slice();
+  if(q.loai==='TN'&&!q.ans)return w.filter((x,i,a)=>a.indexOf(x)===i);
+  // đáp án đã được người dùng sửa -> bỏ cảnh báo về đáp án
+  if(q.loai==='TN'&&q.ans)return w.filter(x=>!/tô màu/.test(x));
+  return w}
+$('f').onchange=async e=>{
+  const f=e.target.files[0];if(!f)return;$('m').className='mu';$('m').textContent='Đang đọc file…';
+  try{
+    if(!/\.docx$/i.test(f.name))throw new Error('Chỉ đọc được file .docx (mở file .doc trong Word rồi Lưu thành .docx).');
+    const z=await JSZip.loadAsync(await f.arrayBuffer());const fx=z.file('word/document.xml');
+    if(!fx)throw new Error('File không đúng định dạng Word.');
+    QS=phanTich(docDong(await fx.async('string')));
+    if(!QS.length)throw new Error('Không tìm thấy câu hỏi nào (câu hỏi cần bắt đầu bằng "Câu 1.", "Câu 2:"…).');
+    const b=Number($('bai').value)||1;QS.forEach(q=>q.bai=b);
+    $('m').textContent='';ve();
+  }catch(er){QS=[];ve();$('m').className='err';$('m').textContent=er.message}
+};
+$('s').onclick=()=>{
+  const md=$('md').value.trim(),ds=QS.filter(q=>!q.bo);
+  if(!md){$('m').className='err';$('m').textContent='Hãy nhập Mã đề (vd 101) để gắn các câu vào đề.';return}
+  const sai=ds.filter(q=>q.loai==='TN'&&!q.ans);if(sai.length){$('m').className='err';$('m').textContent='Còn '+sai.length+' câu trắc nghiệm chưa có đáp án (câu '+sai.map(q=>q.so).join(', ')+').';return}
+  if(!ds.length){$('m').className='err';$('m').textContent='Không còn câu nào để lưu.';return}
+  const b=Number($('bai').value)||1;ds.forEach(q=>q.bai=b);
+  $('s').disabled=true;$('m').className='mu';$('m').textContent='Đang lưu…';
+  gv('gv_nhapDe',{maDe:md,bai:b,diemTN:$('dTN').value,diemDS:$('dDS').value,diemTL:$('dTL').value,
+     qs:ds.map(q=>({loai:q.loai,bai:b,text:q.text,opts:q.opts,ans:q.ans,diem:q.diem||''}))})
+   .then(r=>{$('m').className='ok';$('m').textContent=r.ok;QS=[];ve();$('f').value=''}).catch(e=>{$('m').className='err';$('m').textContent=e.message;$('s').disabled=false})
+};
+</script></body></html>
