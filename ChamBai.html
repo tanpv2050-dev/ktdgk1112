@@ -16,6 +16,7 @@ button{font:inherit;cursor:pointer;border:1px solid var(--bd);background:#fff;bo
 </style></head><body>
 <div class="bar"><b>Chấm bài tự luận</b><div class="row"><span id="cb" class="chip"></span><button id="bcb"></button><button id="bai" title="Chạy AI chấm các bài đang chờ">🤖 AI chấm ngay</button><button id="bduyet" title="Nhận điểm AI cho các bài AI chắc chắn">✔ Duyệt hàng loạt điểm AI</button></div></div>
 <div class="card"><div class="row">
+  <select id="cKy"><option value="">Mọi kỳ thi / môn</option></select>
   <select class="g" id="cQ"></select>
   <select id="cL"><option value="cho">Chưa có điểm chính thức</option><option value="ai">AI đã đề xuất – chờ duyệt</option><option value="xem">AI báo cần giáo viên xem</option><option value="da">Đã có điểm</option><option value="tat">Tất cả</option></select>
   <input id="cK" placeholder="Tìm tên / mã / lớp"><button id="cRe">↻ Tải</button></div>
@@ -36,7 +37,8 @@ gv('gv_thongTin').then(r=>cong(r.cong)).catch(loi);
 $('bcb').onclick=()=>{const c=$('bcb').dataset.c==='1';if(!c&&!confirm('Công bố: học sinh sẽ thấy điểm tổng và nhận xét tự luận. Đã chấm xong chưa?'))return;gv('gv_datCongBo',!c).then(r=>cong(r.cong)).catch(loi)};
 function tai(reset){
   if(reset){off=0;$('cList').textContent=''}
-  gv('gv_dsBai',{qid:$('cQ').value,loc:$('cL').value,tuKhoa:$('cK').value,offset:off,limit:20}).then(r=>{
+  const ky=$('cKy').value.split('|');gv('gv_dsBai',{maKy:ky[0]||'',mon:ky[1]||'',qid:$('cQ').value,loc:$('cL').value,tuKhoa:$('cK').value,offset:off,limit:20}).then(r=>{
+    const sk=$('cKy');if(sk.options.length<=1&&r.locKy&&r.locKy.length>1)r.locKy.forEach(k=>sk.appendChild(Object.assign(el('option',null,k.ten+' · '+k.mon),{value:k.ma+'|'+k.mon})));
     const sel=$('cQ'),cur=sel.value;
     if(sel.options.length<=1||reset&&sel.dataset.n!==String(r.cauTL.length)){sel.textContent='';sel.appendChild(Object.assign(el('option',null,'Tất cả câu tự luận'),{value:''}));r.cauTL.forEach(q=>sel.appendChild(Object.assign(el('option',null,q.id+' – '+q.text.slice(0,70)+' ('+fmt(q.max)+'đ)'),{value:q.id})));sel.value=cur;sel.dataset.n=r.cauTL.length}
     off+=r.ds.length;$('cSum').textContent='Bài tự luận đã nộp: '+r.tong+' · chưa có điểm chính thức: '+r.cho+' · AI đã đề xuất chờ duyệt: '+r.choDuyet+' · cần xem kỹ: '+r.canXem+' · khớp bộ lọc: '+r.khop;
@@ -45,7 +47,7 @@ function tai(reset){
   }).catch(loi)}
 function the(it){
   const c=el('div','card cham'+(it.diem!=null?' xong':'')),h=el('div','bar'),l=el('div');
-  l.append(el('b',null,it.hoTen),el('span','mu',' · '+it.lop+' · '+it.maHS+' · đề '+it.maDe+' · câu '+it.stt+' ('+it.qid+')'));
+  l.append(el('b',null,it.hoTen),el('span','mu',' · '+it.lop+' · '+it.maHS+(it.mon?' · '+it.mon:'')+' · đề '+it.maDe+' · câu '+it.stt+' ('+it.qid+')'));
   const st=el('span','chip '+(it.diem!=null?'ok':'wa'),it.diem!=null?'Đã chấm'+(it.nguoi?' ('+it.nguoi+')':''):'Chưa chấm');h.append(l,st);c.appendChild(h);
   const dt=el('details');dt.appendChild(el('summary',null,'Đề bài và đáp án mẫu'));dt.appendChild(el('div','ans',it.cauHoi));if(it.hd){const g=el('div','ans','Đáp án mẫu / thang điểm:\n'+it.hd);g.style.marginTop='6px';dt.appendChild(g)}c.appendChild(dt);
   c.appendChild(el('div','mu','Bài làm ('+it.soTu+' từ):'));c.appendChild(el('div','ans',it.text||'(không có chữ)'));
@@ -78,7 +80,7 @@ function the(it){
       it.diem=Number(sc.value);c.classList.add('xong');st.className='chip ok';st.textContent='Đã chấm';sv.textContent='Cập nhật';toast('Đã lưu.');if($('cL').value==='cho')c.style.opacity='.55'}).catch(loi).finally(()=>sv.disabled=false)};
   sv.onclick=save;sc.onkeydown=nx.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();save()}};
   if(bAI)f.append(bAI);f.append(sc,el('span','mu','/ '+fmt(it.max)),q0,q5,q1,nx,sv);c.appendChild(f);$('cList').appendChild(c)}
-$('cRe').onclick=()=>tai(true);$('cQ').onchange=$('cL').onchange=()=>tai(true);$('cK').onkeydown=e=>{if(e.key==='Enter')tai(true)};$('cMore').onclick=()=>tai(false);$('lbx').onclick=()=>$('lbx').classList.add('hide');
+$('cRe').onclick=()=>tai(true);$('cKy').onchange=$('cQ').onchange=$('cL').onchange=()=>tai(true);$('cK').onkeydown=e=>{if(e.key==='Enter')tai(true)};$('cMore').onclick=()=>tai(false);$('lbx').onclick=()=>$('lbx').classList.add('hide');
 $('bai').onclick=async()=>{$('bai').disabled=true;try{let lai=true,tong=0;for(let i=0;i<30;i++){toast('AI đang chấm… (xong '+tong+' bài)');const r=await gv('gv_aiChay',lai);lai=false;if(r.loiHeThong){toast(r.loiHeThong);break}tong+=r.xong;if(r.fatal){toast(r.fatal);break}if(r.dangChay){await new Promise(z=>setTimeout(z,5000));continue}if(!r.cho&&!r.dang)break}toast('AI đã chấm xong '+tong+' bài.');tai(true)}catch(e){loi(e)}finally{$('bai').disabled=false}};
 $('bduyet').onclick=()=>{if(!confirm('Nhận điểm AI làm điểm chính thức cho mọi bài AI đã chấm với độ tin cậy cao (bỏ qua các bài AI báo cần xem kỹ)?'))return;gv('gv_aiDuyetHet').then(r=>{toast('Đã duyệt '+r.so+' bài.');tai(true)}).catch(loi)};
 tai(true);

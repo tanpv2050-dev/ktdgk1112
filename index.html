@@ -60,19 +60,20 @@ button:disabled{opacity:.5;cursor:default}
   <h1 id="ti">Kiểm tra trực tuyến</h1>
   <div class="card">
     <div class="mu" id="info">Đang tải cấu hình…</div>
-    <div id="nameW">
-      <label for="hoTen">Họ và tên</label><input id="hoTen" autocomplete="name">
-      <label for="lop">Lớp</label><input id="lop" placeholder="Ví dụ: 12A1">
-    </div>
-    <label for="maHS">Mã học sinh / SBD</label><input id="maHS" autocomplete="off">
-    <div id="pinW" class="hide"><label for="pin">Mã PIN (do giáo viên cấp)</label><input id="pin" type="password" autocomplete="off" inputmode="numeric"></div>
-    <div id="deW"><label for="maDe">Mã đề</label><select id="maDe"><option value="">Hệ thống tự chọn</option></select></div>
+    <label for="maHS">Mã đăng nhập</label><input id="maHS" autocomplete="username" autocapitalize="characters">
+    <div id="pinW" class="hide"><label for="pin">Mật khẩu</label><input id="pin" type="password" autocomplete="current-password"><div class="mu">Mật khẩu do giáo viên cấp. Không dùng mật khẩu của bạn khác.</div></div>
+    <div id="kyW" class="hide"><label for="ky">Kì thi</label><select id="ky"></select></div>
+    <div id="lopW"><label for="lopS">Lớp</label><select id="lopS" class="hide"></select><input id="lopT" class="hide" placeholder="Ví dụ: 12A1"></div>
+    <div id="monW" class="hide"><label for="monThi">Môn thi</label><select id="monThi"><option value="">— Chọn kì thi và lớp trước —</option></select><div id="monNote" class="mu"></div></div>
+    <div id="nameW" class="hide"><label for="hoTen">Họ và tên</label><input id="hoTen" autocomplete="name"></div>
+    <div id="deW" class="hide"><label for="maDe">Mã đề</label><select id="maDe"><option value="">Hệ thống tự chọn</option></select></div>
     <div id="e1" class="err"></div>
     <p><button class="p" id="go">Bắt đầu làm bài</button></p>
-    <div class="mu">Nếu bị mất kết nối hoặc tải lại trang, nhập lại đúng Mã học sinh để làm tiếp; thời gian vẫn tính theo máy chủ. Sau khi nộp bài, nhập lại mã để xem kết quả khi giáo viên đã công bố.</div>
+    <div class="mu">Nếu bị mất kết nối hoặc tải lại trang, hãy chọn lại đúng Kì thi, Lớp, Môn và nhập lại mã đăng nhập để làm tiếp; thời gian vẫn tính theo máy chủ. Sau khi nộp bài, đăng nhập lại để xem kết quả khi giáo viên đã công bố.</div>
   </div>
   <details class="card"><summary>Dành cho giáo viên: mở lại bài cho học sinh</summary>
-    <label for="gvHS">Mã học sinh</label><input id="gvHS">
+    <label for="gvHS">Mã đăng nhập của học sinh</label><input id="gvHS">
+    <div class="mu">Mở lại đúng môn đang chọn ở form phía trên (Kì thi + Môn); nếu chưa chọn thì mở bài gần nhất.</div>
     <label for="gvMk">Mật khẩu giáo viên</label><input id="gvMk" type="password">
     <p><button id="gvGo">Mở lại bài</button> <span id="gvMsg" class="mu"></span></p>
   </details>
@@ -104,7 +105,7 @@ button:disabled{opacity:.5;cursor:default}
 <script>
 const $=id=>document.getElementById(id);
 /* Dán đường dẫn Web App (kết thúc bằng /exec) khi đặt trang này ngoài Apps Script, ví dụ trên GitHub Pages */
-const API_URL='https://script.google.com/macros/s/AKfycbzEhbELJO7ojTGuXFFTrdH9r8Gs7rvYB6zIYKewh6m7B7mDkEXkqu7gfdAhG0lRxCq1/exec';
+const API_URL='https://script.google.com/macros/s/AKfycbyPlUX7oZFGGp4sDV8bGxgtLy-Ow-loT5nGrVPbORqhBHaEUlp_x7mixbNmeVgblklb/exec';
 const inGAS=typeof google!=='undefined'&&google.script&&google.script.run;
 const call=(fn,...a)=>inGAS
   ?new Promise((ok,no)=>google.script.run.withSuccessHandler(ok).withFailureHandler(no)[fn](...a))
@@ -116,21 +117,69 @@ const show=n=>{['s1','s2','s3'].forEach(k=>$(k).classList.toggle('hide',k!=='s'+
 const el=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e};
 let skipT=0,S=null,cur=0,flag={},endAt=0,roi=0,sending=false,saveT=null,warned={},tick=null,lastLeave=0,uploading=0;
 const prev={};            // id ảnh → dữ liệu ảnh (data URL) để xem trước
+let CFG=null;
+const lopVal=()=>($('lopS').classList.contains('hide')?$('lopT').value:$('lopS').value).trim();
+const luuNho=(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}};const docNho=k=>{try{return localStorage.getItem(k)||''}catch(e){return''}};
+
+function napMon(){
+  const sel=$('monThi'),ky=$('ky').value,lop=lopVal();
+  if(!CFG||CFG.cheDo!=='kyThi')return;
+  $('monNote').textContent='';
+  if(!ky||!lop){sel.innerHTML='<option value="">— Chọn kì thi và lớp trước —</option>';return}
+  sel.innerHTML='<option value="">Đang tải…</option>';
+  const keyReq=ky+'|'+lop;sel._k=keyReq;
+  call('api_tuyChon',ky,lop).then(r=>{
+    if(sel._k!==keyReq)return;
+    const ds=(r&&r.mon)||[];const cu=docNho('mon');
+    sel.innerHTML='';
+    if(!ds.length){sel.innerHTML='<option value="">— Lớp này không có môn thi trong kì thi đã chọn —</option>';return}
+    sel.appendChild(new Option('— Chọn môn —',''));
+    ds.forEach(m=>{const o=new Option(m.mon+(m.mo?'':' (chưa mở)'),m.mon);o.disabled=!m.mo;o._m=m;sel.appendChild(o)});
+    const dung=ds.filter(m=>m.mo);if(dung.length===1)sel.value=dung[0].mon;else if(cu&&ds.some(m=>m.mon===cu&&m.mo))sel.value=cu;
+    ghiChuMon();
+  }).catch(()=>{sel.innerHTML='<option value="">Lỗi kết nối, hãy chọn lại</option>'});
+}
+function ghiChuMon(){
+  const o=$('monThi').selectedOptions[0],m=o&&o._m;
+  if(!m){$('monNote').textContent='';return}
+  const tp=[m.soTN?m.soTN+' câu trắc nghiệm':'',m.soDS?m.soDS+' câu đúng/sai':'',m.soTL?m.soTL+' câu tự luận':''].filter(Boolean).join(' + ');
+  $('monNote').textContent=m.mo?('Thời gian '+m.thoiLuong+' phút'+(tp?' · '+tp:'')):(m.lyDo||'Môn này chưa mở.');
+}
 
 /* ---- Khởi tạo ---- */
 call('layCauHinh').then(c=>{
-  $('ti').textContent=c.tieuDe;document.title=c.tieuDe;
-  const tp=[c.soTN?c.soTN+' câu trắc nghiệm':'',c.soDS?c.soDS+' câu đúng/sai':'',c.soTL?c.soTL+' câu tự luận':''].filter(Boolean).join(' + ');
-  $('info').textContent='Thời gian làm bài: '+c.thoiLuong+' phút · '+(tp||('Tối đa '+c.soCau+' câu'))+' · Mỗi học sinh chỉ làm 1 lần.';
-  c.dsMaDe.forEach(m=>{const o=document.createElement('option');o.value=m;o.textContent='Đề '+m;$('maDe').appendChild(o)});
-  $('deW').classList.toggle('hide',!c.choChonMaDe);      // giáo viên tắt chọn mã đề: hệ thống tự phân
-  $('nameW').classList.toggle('hide',!!c.dungDS);        // có danh sách dự thi: họ tên/lớp lấy từ danh sách
+  CFG=c;$('ti').textContent=c.tieuDe;document.title=c.tieuDe;
+  const kyMode=c.cheDo==='kyThi';
+  $('kyW').classList.toggle('hide',!kyMode);$('monW').classList.toggle('hide',!kyMode);
   $('pinW').classList.toggle('hide',!c.canPin);
-  if(c.dongMo===false)$('e1').textContent='Bài kiểm tra hiện đang đóng.';
+  $('nameW').classList.toggle('hide',!!c.dungDS);
+  if(c.dsLop&&c.dsLop.length){const s=$('lopS');s.classList.remove('hide');s.appendChild(new Option('— Chọn lớp —',''));c.dsLop.forEach(l=>s.appendChild(new Option(l,l)));s.value=docNho('lop')}else{$('lopT').classList.remove('hide');$('lopT').value=docNho('lop')}
+  if(kyMode){
+    const k=$('ky');k.appendChild(new Option('— Chọn kì thi —',''));
+    c.ky.forEach(x=>k.appendChild(new Option(x.ten+(x.nam?' ('+x.nam+')':''),x.ma)));
+    if(c.ky.length===1)k.value=c.ky[0].ma;else k.value=docNho('ky');
+    $('info').textContent='Chọn Kì thi, Lớp và Môn, rồi nhập Mã đăng nhập và Mật khẩu.';
+    napMon();
+  }else{
+    const tp=[c.soTN?c.soTN+' câu trắc nghiệm':'',c.soDS?c.soDS+' câu đúng/sai':'',c.soTL?c.soTL+' câu tự luận':''].filter(Boolean).join(' + ');
+    $('info').textContent='Thời gian làm bài: '+c.thoiLuong+' phút · '+(tp||('Tối đa '+c.soCau+' câu'))+' · Mỗi học sinh chỉ làm 1 lần.';
+    (c.dsMaDe||[]).forEach(m=>$('maDe').appendChild(new Option('Đề '+m,m)));
+    $('deW').classList.toggle('hide',!c.choChonMaDe);
+  }
 }).catch(e=>{$('info').textContent='Không tải được cấu hình ('+(e&&e.message||'lỗi kết nối')+'). Hãy tải lại trang.'});
+$('ky').onchange=()=>{luuNho('ky',$('ky').value);napMon()};
+$('lopS').onchange=()=>{luuNho('lop',$('lopS').value);napMon()};
+$('lopT').onchange=()=>{luuNho('lop',$('lopT').value);napMon()};
+$('monThi').onchange=()=>{luuNho('mon',$('monThi').value);ghiChuMon()};
 
 $('go').onclick=()=>{
-  const p={hoTen:$('hoTen').value,lop:$('lop').value,maHS:$('maHS').value,maDe:$('maDe').value,pin:$('pin').value};
+  const kyMode=CFG&&CFG.cheDo==='kyThi';
+  if(!$('maHS').value.trim()){$('e1').textContent='Vui lòng nhập Mã đăng nhập.';$('maHS').focus();return}
+  if(!$('pinW').classList.contains('hide')&&!$('pin').value.trim()){$('e1').textContent='Vui lòng nhập Mật khẩu.';$('pin').focus();return}
+  if(kyMode&&!$('ky').value){$('e1').textContent='Hãy chọn Kì thi.';return}
+  if(!lopVal()){$('e1').textContent='Hãy chọn Lớp.';return}
+  if(kyMode&&!$('monThi').value){$('e1').textContent='Hãy chọn Môn thi.';return}
+  const p={maHS:$('maHS').value,pin:$('pin').value,maKy:kyMode?$('ky').value:'',lop:lopVal(),mon:kyMode?$('monThi').value:'',hoTen:$('hoTen').value,maDe:$('maDe').value};
   $('e1').textContent='';$('go').disabled=true;$('go').textContent='Đang vào…';
   call('batDau',p).then(r=>{
     $('go').disabled=false;$('go').textContent='Bắt đầu làm bài';
@@ -139,7 +188,7 @@ $('go').onclick=()=>{
     batDauThi(r);
   }).catch(e=>{$('go').disabled=false;$('go').textContent='Bắt đầu làm bài';$('e1').textContent='Lỗi kết nối, vui lòng thử lại.'});
 };
-$('gvGo').onclick=()=>{call('moLaiHS',$('gvHS').value,$('gvMk').value).then(r=>{$('gvMsg').textContent=r.loi||r.ok}).catch(()=>{$('gvMsg').textContent='Lỗi kết nối.'})};
+$('gvGo').onclick=()=>{call('moLaiHS',$('gvHS').value,$('gvMk').value,CFG&&CFG.cheDo==='kyThi'?$('ky').value:'',CFG&&CFG.cheDo==='kyThi'?$('monThi').value:'').then(r=>{$('gvMsg').textContent=r.loi||r.ok}).catch(()=>{$('gvMsg').textContent='Lỗi kết nối.'})};
 
 /* ---- Làm bài ---- */
 const isTL=q=>q.loai==='TL', isDS=q=>q.loai==='DS';
@@ -152,7 +201,7 @@ function batDauThi(r){
   S=r;S.ans=r.dapAn||{};roi=r.roiTab||0;cur=0;flag={};
   S.qs.forEach(q=>{const a=S.ans[q.stt];if(isTL(q)&&a){(a.im||[]).forEach(layPrev)}});   // nạp lại ảnh đã tải trước đó
   endAt=performance.now()+r.conLai*1000;
-  $('who').textContent=r.hoTen+' · Đề '+r.maDe;show(2);render();
+  window.__tok=r.token;$('who').textContent=r.hoTen+' · '+(r.monThi?r.monThi+' · ':'')+'Đề '+r.maDe;show(2);render();
   tick=setInterval(dem,500);dem();
   window.onbeforeunload=e=>{if(!S.done){e.preventDefault();e.returnValue=''}};
   setInterval(()=>{if(!S.done)luu(true)},45000);
@@ -176,16 +225,54 @@ function meta(){   // tiến độ + bảng câu hỏi (không vẽ lại ô nh�
   S.qs.forEach((x,i)=>{const p=phanOf(x);if(p!==lastP){lastP=p;const h=el('div','mu',TEN_PHAN[p]);h.style.cssText='grid-column:1/-1;flex-basis:100%;width:100%;font-weight:700;margin:6px 0 0';$('gd').appendChild(h)}
     const b=document.createElement('button');b.textContent=x.so||x.stt;b.title=TEN_PHAN[p]+' – câu '+(x.so||x.stt);b.className=(xong(x)?'d ':'')+(flag[x.stt]?'f ':'')+(isTL(x)?'t ':'')+(i===cur?'c':'');b.onclick=()=>{cur=i;render()};$('gd').appendChild(b)});
 }
+
+/* ---- Ảnh trong đề (câu hỏi, phương án, ý đúng/sai) ----
+   Ảnh nằm trong Drive riêng tư của giáo viên; trang thi chỉ xin được ảnh thuộc đề của mình qua layAnhDe(token, id). */
+const imgC={};
+const TOK=()=>S&&S.token||(window.__tok||'');
+function layAnhDeCache(id){
+  if(!imgC[id])imgC[id]=call('layAnhDe',TOK(),id).then(r=>{if(r&&r.url)return r.url;throw new Error((r&&r.loi)||'khong tai duoc')}).catch(e=>{delete imgC[id];throw e});
+  return imgC[id];
+}
+function veAnh(host,ids,alt,nho){
+  (ids||[]).forEach(id=>{
+    const wrap=el('div','question-image-wrap');wrap.style.cssText='margin:8px 0;max-width:100%;';
+    const ld=el('div','mu','Đang tải hình ảnh…');wrap.appendChild(ld);host.appendChild(wrap);
+    const lan=(n)=>layAnhDeCache(id).then(u=>{
+      const im=document.createElement('img');im.alt=alt||'Hình minh họa';
+      im.style.cssText='display:block;max-width:100%;height:auto;max-height:'+(nho?'260':'420')+'px;object-fit:contain;border-radius:8px;background:#fff';
+      im.onload=()=>{ld.remove()};im.onerror=()=>{ld.textContent='Không hiển thị được hình.'};im.src=u;wrap.appendChild(im);
+    }).catch(()=>{if(n<2)setTimeout(()=>lan(n+1),1200*(n+1));else{ld.textContent='Không tải được hình. Bấm để thử lại.';ld.style.cursor='pointer';ld.onclick=()=>{ld.textContent='Đang tải hình ảnh…';ld.onclick=null;lan(0)}}});
+    lan(0);
+  });
+}
+/* Nội dung chữ; thẻ [IMG:id] cũ (nếu còn sót) vẫn được đổi thành hình */
+function chenNoiDungCoAnh(host,value,altText,anhIds,nho){
+  const raw=String(value==null?'':value),re=/\[IMG:([^\]]+)\]/g;let last=0,m;
+  while((m=re.exec(raw))!==null){
+    if(m.index>last)host.appendChild(document.createTextNode(sach(raw.slice(last,m.index))));
+    const id=String(m[1]||'').trim();if(id)veAnh(host,[id],altText,nho);
+    last=re.lastIndex;
+  }
+  if(last<raw.length)host.appendChild(document.createTextNode(sach(raw.slice(last))));
+  veAnh(host,anhIds,altText,nho);
+}
+function veNoiDungCauHoi(q){
+  const host=$('qt');
+  chenNoiDungCoAnh(host,q&&q.text,'Hình minh họa câu hỏi',q&&q.img);
+  if(!String(q&&q.text||'').trim()&&!(q&&q.img&&q.img.length))host.textContent='(Câu hỏi chưa có nội dung.)';
+}
+
 function render(){
   const q=S.qs[cur];
   $('qh').textContent='';
   const tagCls='tag'+(isTL(q)?' tl':(isDS(q)?' ds':''));
   const tagTxt=isTL(q)?'Tự luận · '+fmt(q.diem)+' điểm':(isDS(q)?'Đúng/Sai':'Trắc nghiệm');
   $('qh').append(TEN_PHAN[phanOf(q)]+' · Câu '+(q.so||q.stt)+'/'+(q.nP||S.tong)+' ',el('span',tagCls,tagTxt));
-  $('qt').textContent=sach(q.text);$('qo').textContent='';
+  $('qt').textContent='';veNoiDungCauHoi(q);$('qo').textContent='';
   if(isTL(q))veTL(q);
   else if(isDS(q))veDS(q);
-  else{const a=S.ans[q.stt];q.opts.forEach((t,k)=>{const L='ABCD'[k],b=document.createElement('button');b.className='o'+(a===L?' sel':'');b.textContent=L+'. '+t;b.onclick=()=>{S.ans[q.stt]=L;render();luuSau()};$('qo').appendChild(b)})}
+  else{const a=S.ans[q.stt];q.opts.forEach((t,k)=>{const L='ABCD'[k],b=document.createElement('button');b.type='button';b.className='o'+(a===L?' sel':'');b.appendChild(document.createTextNode(L+'. '));chenNoiDungCoAnh(b,t,'Hình minh họa phương án '+L,q.oi&&q.oi[k],true);b.onclick=()=>{S.ans[q.stt]=L;render();luuSau()};$('qo').appendChild(b)})}
   $('pv').disabled=cur===0;$('nx').disabled=cur===S.tong-1;
   $('fl').textContent=flag[q.stt]?'🚩 Bỏ đánh dấu':'🚩 Đánh dấu xem lại';
   meta();
@@ -201,7 +288,9 @@ function veDS(q){
   (q.opts||[]).slice(0,4).forEach((t,k)=>{
     const st=cur0[k];
     const row=el('div','ds-row'+(st==='D'||st==='S'?' done':''));
-    const tx=el('div','ds-txt','abcd'[k]+') '+String(t||'').replace(/^\s*[a-dA-D]\s*[).:]\s*/,''));
+    const tx=el('div','ds-txt');
+    tx.appendChild(document.createTextNode('abcd'[k]+') '));
+    chenNoiDungCoAnh(tx,String(t||'').replace(/^\s*[a-dA-D]\s*[).:]\s*/,''),'Hình minh họa ý '+'abcd'[k],q.oi&&q.oi[k],true);
     const bw=el('div','ds-btns');
     [['D','Đúng','sel-d'],['S','Sai','sel-s']].forEach(([v,lb,cls])=>{
       const b=el('button','ds-btn'+(st===v?' '+cls:''),lb);
@@ -312,7 +401,7 @@ async function nop(hetGio){
 /* ---- Kết quả ---- */
 function ketQua(k){
   show(3);const rs=$('rs');rs.textContent='';
-  rs.appendChild(el('div','mu','Đã nộp bài – '+k.hoTen));
+  window.__tok=k.token||window.__tok;rs.appendChild(el('div','mu','Đã nộp bài – '+k.hoTen+(k.monThi?' · '+k.monThi:'')+(k.maDe?' · Đề '+k.maDe:'')));
   const tt=k.diem!=null;
   if(tt){rs.appendChild(el('div','big',fmt(k.diem)+' / '+fmt(k.thang)+' điểm'))}
   else rs.appendChild(el('div',null,'Bài làm của em đã được ghi nhận.'));
@@ -342,13 +431,13 @@ function ketQua(k){
     if(q.hd)c.appendChild(el('div','ex','Hướng dẫn chấm: '+q.hd));
     rv.appendChild(c)});
   (k.review||[]).forEach(q=>{
-    if(q.loai==='DS'){const c=el('div','card');const t=el('div',null,'Phần II · Câu '+(q.so||q.stt)+'. '+sach(q.text));t.style.whiteSpace='pre-wrap';c.appendChild(t);
+    if(q.loai==='DS'){const c=el('div','card');const t=el('div',null,'Phần II · Câu '+(q.so||q.stt)+'. '+sach(q.text));t.style.whiteSpace='pre-wrap';c.appendChild(t);veAnh(c,q.img,'Hình minh họa câu hỏi');
       const ch=q.chon&&q.chon.length===4?q.chon:'----';let so=0;
-      q.opts.forEach((o,i)=>{const ok=ch[i]===q.dung[i];if(ok)so++;const cleanO=String(o||'').replace(/^\s*[a-dA-D]\s*[).:]\s*/,'');const d=el('div','o '+(ok?'ok':'no'),'abcd'[i]+') '+cleanO+'  —  Bạn chọn: '+({D:'Đúng',S:'Sai'}[ch[i]]||'chưa chọn')+' · Đáp án: '+(q.dung[i]==='D'?'Đúng':'Sai')+(ok?' ✅':' ❌'));d.style.cssText='padding:8px 12px;border-radius:10px;border:1px solid var(--bd);margin:6px 0';c.appendChild(d)});
+      q.opts.forEach((o,i)=>{const ok=ch[i]===q.dung[i];if(ok)so++;const cleanO=String(o||'').replace(/^\s*[a-dA-D]\s*[).:]\s*/,'');const d=el('div','o '+(ok?'ok':'no'));d.appendChild(document.createTextNode('abcd'[i]+') '+cleanO));veAnh(d,q.oi&&q.oi[i],'Hình ý '+'abcd'[i],true);d.appendChild(document.createTextNode('  —  Bạn chọn: '+({D:'Đúng',S:'Sai'}[ch[i]]||'chưa chọn')+' · Đáp án: '+(q.dung[i]==='D'?'Đúng':'Sai')+(ok?' ✅':' ❌')));d.style.cssText='padding:8px 12px;border-radius:10px;border:1px solid var(--bd);margin:6px 0';c.appendChild(d)});
       c.appendChild(el('div','ex','Đúng '+so+'/4 ý'+(q.gt?'. '+q.gt:'')));rv.appendChild(c);return}
     const c=document.createElement('div');c.className='card';
-    const t=document.createElement('div');t.textContent='Phần I · Câu '+(q.so||q.stt)+'. '+sach(q.text);t.style.whiteSpace='pre-wrap';c.appendChild(t);
-    q.opts.forEach((o,i)=>{const L='ABCD'[i],d=document.createElement('div');d.className='o'+(L===q.dung?' ok':(L===q.chon&&q.dung?' no':(L===q.chon?' sel':'')));d.textContent=L+'. '+o;d.style.padding='8px 12px';d.style.borderRadius='10px';d.style.border='1px solid var(--bd)';d.style.margin='6px 0';c.appendChild(d)});
+    const t=document.createElement('div');t.textContent='Phần I · Câu '+(q.so||q.stt)+'. '+sach(q.text);t.style.whiteSpace='pre-wrap';c.appendChild(t);veAnh(c,q.img,'Hình minh họa câu hỏi');
+    q.opts.forEach((o,i)=>{const L='ABCD'[i],d=document.createElement('div');d.className='o'+(L===q.dung?' ok':(L===q.chon&&q.dung?' no':(L===q.chon?' sel':'')));d.appendChild(document.createTextNode(L+'. '+o));veAnh(d,q.oi&&q.oi[i],'Hình phương án '+L,true);d.style.padding='8px 12px';d.style.borderRadius='10px';d.style.border='1px solid var(--bd)';d.style.margin='6px 0';c.appendChild(d)});
     if(q.dung){const e=document.createElement('div');e.className='ex';e.textContent=(q.chon===q.dung?'✅ ':'❌ ')+'Đáp án đúng: '+q.dung+(q.gt?'. '+q.gt:'');c.appendChild(e)}
     rv.appendChild(c)});
 }

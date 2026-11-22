@@ -1,71 +1,64 @@
 <!DOCTYPE html>
-<html lang="vi"><head><base target="_top"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
+<html lang="vi"><head><base target="_top"><meta charset="utf-8">
 <style>
-:root{--bg:#f4f6fb;--fg:#172033;--muted:#64748b;--line:#dbe3ef;--blue:#2563eb;--green:#059669;--red:#dc2626}*{box-sizing:border-box}body{margin:0;padding:18px;background:var(--bg);color:var(--fg);font:14px/1.45 Arial,sans-serif}.head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}.head h2{margin:0;font-size:20px}.pill{background:#e0eaff;color:#1d4ed8;padding:5px 10px;border-radius:30px;font-size:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}.wide{grid-column:1/-1}label{display:block;font-weight:600;margin:8px 0 4px}input,select,textarea{width:100%;padding:9px 10px;border:1px solid #cbd5e1;border-radius:8px;font:inherit;background:#fff}textarea{min-height:260px;font:12px/1.45 Consolas,monospace;resize:vertical}button{border:0;border-radius:8px;padding:9px 14px;font-weight:600;cursor:pointer;background:#e2e8f0;color:#172033}button.primary{background:var(--blue);color:white}button.green{background:var(--green);color:white}button:disabled{opacity:.5;cursor:not-allowed}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.muted{color:var(--muted);font-size:12px}.status{white-space:pre-wrap;margin-top:8px;padding:9px;border-radius:8px;background:#eef2ff;color:#1e40af}.status.error{background:#fef2f2;color:#991b1b}.status.ok{background:#ecfdf5;color:#065f46}.step{font-weight:700;margin-bottom:6px}.notice{border-left:3px solid #f59e0b;padding:8px 10px;background:#fffbeb;color:#854d0e;font-size:12px;margin-top:10px}.hidden{display:none}.stat{display:flex;gap:16px;color:var(--muted);font-size:12px}
+*{box-sizing:border-box}body{margin:0;padding:14px;font:14px/1.5 system-ui,"Segoe UI",Roboto,Arial,sans-serif;color:#1c2230}
+input,select,textarea{font:inherit;padding:5px 8px;border:1px solid #d6dbe8;border-radius:8px;max-width:100%}textarea{width:100%}
+button{font:inherit;cursor:pointer;border:1px solid #d6dbe8;background:#fff;border-radius:8px;padding:5px 10px}button.p{background:#2563eb;color:#fff;border-color:#2563eb;font-weight:600}button.d{color:#dc2626}button:disabled{opacity:.5}
+.mu{color:#5d667a;font-size:.85rem}.err{color:#dc2626;font-weight:600}.ok{color:#16a34a;font-weight:600}
+.bar{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin:8px 0}.bar label,.f label{display:block;font-weight:600;font-size:.85rem}
+table{border-collapse:collapse;width:100%}th,td{border-bottom:1px solid #e5e9f4;padding:5px 6px;text-align:left;vertical-align:top}th{background:#f4f6fb;position:sticky;top:0}
+.box{border:1px solid #d6dbe8;border-radius:10px;padding:10px;margin:10px 0;background:#fafbff}.tag{display:inline-block;padding:0 8px;border-radius:999px;background:#e8eefc;font-size:.8rem}.tag.g{background:#dcfce7}.tag.r{background:#fee2e2}.tag.y{background:#fef3c7}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px}.chk{display:inline-flex;gap:4px;align-items:center;margin:2px 8px 2px 0;font-weight:400}
 </style></head><body>
-<div class="head"><div><h2>Ngân hàng đề thi theo khối</h2><div class="muted">Nhập Word Hybrid · lưu bản gốc · phân tích · duyệt trước khi đưa vào ngân hàng</div></div><span class="pill">GRADE BANK V1.0</span></div>
-<div class="card"><div class="step">1. Thông tin ngân hàng đích</div><div class="grid">
-<div><label>Khối lớp</label><select id="grade"><option value="10">Khối 10</option><option value="11" selected>Khối 11</option><option value="12">Khối 12</option></select></div>
-<div><label>Môn học</label><input id="subject" value="Tin học" placeholder="Ví dụ: Tin học"></div>
-<div><label>Học kỳ</label><select id="term"><option>HKI</option><option>HKII</option><option>Cả năm</option></select></div>
-<div><label>Năm học</label><input id="year" value="2026-2027"></div>
-<div><label>Đợt kiểm tra</label><input id="campaign" value="Giữa học kỳ I" placeholder="Ví dụ: Giữa học kỳ I"></div>
-<div><label>Tên đề</label><input id="title" placeholder="Ví dụ: Đề kiểm tra giữa HKI Tin học 11"></div>
-<div class="wide"><label>Tệp đề Word (.docx)</label><input id="word" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"><div class="muted">Giới hạn 8 MB. Tệp gốc được lưu trong Google Drive. Tệp .doc cũ cần chuyển sang .docx.</div></div>
-</div><div class="row" style="margin-top:12px"><button class="primary" id="parse">Đọc Word và phân tích câu hỏi</button><span class="muted" id="fileInfo"></span></div>
-<div class="notice">Phân tích tự động là bước hỗ trợ, không thay thế thẩm định của giáo viên. Bảng, công thức, hình vẽ, câu Đúng/Sai và câu có bố cục phức tạp cần đối chiếu với Word gốc. Bản hiện tại tự nhận diện câu TN 4 lựa chọn và câu tự luận; giáo viên có thể sửa JSON trước khi duyệt.</div>
+<div class="bar">
+ <div><label>Khối</label><select id="fk"><option value="">Tất cả</option><option>10</option><option>11</option><option>12</option></select></div>
+ <div><label>Môn</label><select id="fm"><option value="">Tất cả</option></select></div>
+ <label class="chk"><input type="checkbox" id="fa"> Hiện cả đề đã lưu trữ</label>
 </div>
-<div class="card hidden" id="preview"><div class="step">2. Xem trước và hiệu chỉnh dữ liệu câu hỏi</div><div class="stat"><span id="count">0 câu</span><span id="types"></span><span id="warnings"></span></div><label>Dữ liệu câu hỏi (JSON) – có thể chỉnh sửa trước khi lưu</label><textarea id="json"></textarea><div class="muted">Mỗi câu: {"type":"TN|TL","text":"...","options":{"A":"...","B":"...","C":"...","D":"..."},"answer":"A","points":0.25,"lesson":1,"explanation":"","rubric":"","allowImage":false}. Câu TN bắt buộc đủ 4 lựa chọn và đáp án A/B/C/D. Câu TL dùng rubric làm hướng dẫn chấm.</div><div class="row" style="margin-top:12px"><button class="primary" id="saveDraft">Lưu Word gốc + bản nháp</button></div></div>
-<div class="card hidden" id="approve"><div class="step">3. Duyệt và nhập vào ngân hàng</div><div class="muted" id="draftInfo"></div><label>Mã đề (duy nhất)</label><input id="examCode" placeholder="Ví dụ: 11_TIN_HKI_2026_GK01"><div class="row" style="margin-top:12px"><button class="green" id="approveBtn">Duyệt và nhập ngân hàng</button><button id="cancel">Đóng</button></div></div>
-<div class="card"><div class="step">4. Các bộ đề đã duyệt</div><div id="sets" class="muted">Đang tải…</div></div>
-<div id="msg" class="status">Sẵn sàng. Hãy chọn thông tin và tệp Word.</div>
+<div class="box f"><b>Tạo mã đề trống</b> <span class="mu">(mã 4 số: số đầu = khối 1/2/3 cho khối 10/11/12, số thứ hai = môn, hai số cuối = thứ tự; ví dụ 3101 = Khối 12 · Tin học · đề 01)</span>
+ <div class="bar"><div><label>Khối</label><select id="nk"><option value="">—</option><option>10</option><option>11</option><option>12</option></select></div>
+ <div><label>Môn</label><select id="nm"><option value="">—</option></select></div>
+ <div><label>Số mã đề</label><input id="ns" type="number" min="1" max="20" value="1" style="width:70px"></div>
+ <button class="p" id="tao">Tạo</button></div>
+ <div class="mu">Sau khi tạo, dùng menu <b>Nhập đề từ file Word</b> để chọn mã đề này và đưa câu hỏi vào; hoặc dùng <b>Nhân bản</b> bên dưới để tạo nhiều mã đề từ một đề gốc (đảo thứ tự câu và hoán vị phương án).</div></div>
+<p id="m" class="mu"></p>
+<div id="nb" class="box f" style="display:none"></div>
+<table><thead><tr><th>Mã đề</th><th>Khối</th><th>Môn</th><th>Gốc</th><th>TN</th><th>Đ/S</th><th>TL</th><th>Trạng thái</th><th></th></tr></thead><tbody id="tb"></tbody></table>
+<div id="ct" class="box" style="display:none"></div>
 <script>
-const KEY='<?= KEY ?>', $=id=>document.getElementById(id);
+const KEY=<?!= JSON.stringify(KEY) ?>;const $=id=>document.getElementById(id);
 const gv=(fn,...a)=>new Promise((ok,no)=>google.script.run.withSuccessHandler(ok).withFailureHandler(e=>no(new Error(e&&e.message||String(e))))[fn](KEY,...a));
-let parsed=[],selectedFile=null,docId=null;
-function message(s,type=''){const e=$('msg');e.textContent=s;e.className='status '+type}
-function meta(){return {grade:$('grade').value,subject:$('subject').value,term:$('term').value,campaign:$('campaign').value,year:$('year').value,title:$('title').value}}
-function parseAnswerKey(text){
- const map={},lines=text.replace(/\r/g,'').split('\n').map(x=>x.trim()).filter(Boolean);
- // Hỗ trợ bảng đáp án dạng hai hàng: Câu | 1 | 2 ... và Đáp án | A | B ...
- for(let i=0;i<lines.length-1;i++){
-  if(/^Câu\b/i.test(lines[i])&&/^Đáp\s*án\b/i.test(lines[i+1])){
-   const splitCells=x=>{const c=x.split(/[\t|]/).map(y=>y.trim()).filter(Boolean);return c.length>1?c:x.split(/\s+/)};const nums=splitCells(lines[i]).slice(1).map(Number),ans=splitCells(lines[i+1]).slice(1).map(x=>x.toUpperCase());
-   nums.forEach((n,j)=>{if(n>0&&'ABCD'.includes(ans[j]||''))map[n]=ans[j]});
-  }
- }
- const tail=(text.match(/(?:Đáp\s*án|ĐÁP\s*ÁN|Answer\s*key)[\s:：-]*([\s\S]*)/i)||[])[1]||'';
- const re=/(\d{1,3})\s*[.):-]?\s*([ABCD])/gi;let m;while((m=re.exec(tail)))if(!map[Number(m[1])])map[Number(m[1])]=m[2].toUpperCase();
- return map;
+const msg=(t,c)=>{$('m').className=c||'mu';$('m').textContent=t};
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+let DE=[],MON=[];
+function ve(){
+  const k=$('fk').value,m=$('fm').value.toLowerCase(),a=$('fa').checked,tb=$('tb');tb.textContent='';
+  DE.filter(d=>(!k||d.khoi===k)&&(!m||d.mon.toLowerCase()===m)&&(a||d.tt==='ACTIVE')).forEach(d=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML='<td><b>'+d.ma+'</b></td><td>'+esc(d.khoi)+'</td><td>'+esc(d.mon||'?')+(d.chuaKhaiBao?' <span class="tag y">chưa khai báo</span>':'')+'</td><td>'+esc(d.goc)+'</td><td>'+d.tn+'</td><td>'+d.ds+'</td><td>'+d.tl+'</td><td><span class="tag '+(d.tt==='ACTIVE'?'g':'r')+'">'+(d.tt==='ACTIVE'?'Đang dùng':'Lưu trữ')+'</span></td><td></td>';
+    const td=tr.lastChild,bt=(t,f,c)=>{const b=document.createElement('button');b.textContent=t;if(c)b.className=c;b.onclick=f;td.append(b,' ')};
+    bt('Xem câu',()=>xem(d.ma));bt('Nhân bản',()=>nhanBan(d));
+    bt(d.tt==='ACTIVE'?'Lưu trữ':'Dùng lại',()=>run(()=>gv('gv_deTrangThai',d.ma,d.tt==='ACTIVE'?'ARCHIVED':'ACTIVE')));
+    bt('Xoá',()=>{if(confirm('Xoá mã đề '+d.ma+'? (Câu hỏi vẫn còn trong ngân hàng)'))run(()=>gv('gv_deXoa',d.ma))},'d');
+    tb.appendChild(tr)});
 }
-function parseDocText(text){
- const lines=text.replace(/\r/g,'').split('\n').map(x=>x.trim()).filter(Boolean),starts=[];
- lines.forEach((line,i)=>{const m=line.match(/^(?:Câu|Cau|Question)\s*(\d{1,3})\s*[.:)\-]?\s*(.*)$/i);if(m)starts.push({i,n:Number(m[1]),first:m[2]})});
- if(!starts.length)throw new Error('Không nhận diện được tiêu đề câu hỏi. Hãy chuẩn hóa Word theo dạng “Câu 1.” rồi thử lại.');
- const key=parseAnswerKey(text),out=[];
- starts.forEach((s,k)=>{
-  const end=k+1<starts.length?starts[k+1].i:lines.length;
-  let body=[s.first,...lines.slice(s.i+1,end)].filter(Boolean).join('\n').replace(/(?:ĐÁP\s*ÁN\s*VÀ\s*HƯỚNG\s*DẪN\s*CHẤM|Đáp\s*án|Answer\s*key)[\s:：-]*[\s\S]*$/i,'').trim();
-  const opts={A:'',B:'',C:'',D:''},parts=body.split('\n');let prompt=[],found=0;
-  const optionRe=/(?:^|\s)([A-D])\s*[.):-]\s*([\s\S]*?)(?=\s+[A-D]\s*[.):-]\s*|$)/gi;
-  parts.forEach(line=>{let matches=[...line.matchAll(optionRe)];if(matches.length){matches.forEach(m=>{const k=m[1].toUpperCase(),v=m[2].trim();if(v&&!opts[k]){opts[k]=v;found++}})}else prompt.push(line)});
-  // Nhiều đề Word trình bày bốn phương án thành bốn dòng không gắn nhãn A/B/C/D.
-  if(found<4&&key[s.n]){
-   const raw=parts.slice(1).filter(x=>!/^Đáp\s*án/i.test(x)&&!/(?:^|\s)[A-D]\s*[.):-]/i.test(x));
-   const candidates=raw.filter(x=>x.length>1).slice(0,4),missing=['A','B','C','D'].filter(k=>!opts[k]);
-   missing.forEach((k,i)=>{if(candidates[i])opts[k]=candidates[i]});
-   if(candidates.length>=missing.length&&missing.length>0)prompt=[parts[0]];
-  }
-  const isMC=Object.values(opts).every(Boolean)||!!key[s.n];
-  out.push({type:isMC?'TN':'TL',text:prompt.join('\n').trim()||s.first,options:opts,answer:key[s.n]||'',points:isMC?0.25:1,lesson:1,explanation:'',rubric:'',allowImage:false,warning:isMC?(Object.values(opts).every(Boolean)?'':'Thiếu một hoặc nhiều phương án; cần bổ sung từ Word gốc'):'Cần kiểm tra loại câu hỏi và nội dung đối chiếu Word gốc'});
- });return out;
+const tai=()=>gv('gv_deDS').then(r=>{DE=r.de;if(!MON.length){MON=r.mon;MON.forEach(x=>{$('fm').appendChild(new Option(x,x));$('nm').appendChild(new Option(x,x))})}ve()}).catch(e=>msg(e.message,'err'));
+async function run(f){try{const r=await f();msg(r&&r.ok||'Xong.','ok');$('ct').style.display='none';$('nb').style.display='none';await tai()}catch(e){msg(e.message,'err')}}
+['fk','fm','fa'].forEach(i=>$(i).onchange=ve);
+$('tao').onclick=()=>run(()=>gv('gv_deTao',{khoi:$('nk').value,mon:$('nm').value,soBan:$('ns').value}));
+function nhanBan(d){
+  const b=$('nb');b.style.display='block';
+  b.innerHTML='<b>Nhân bản mã đề '+d.ma+'</b> (Khối '+esc(d.khoi)+' · '+esc(d.mon)+') &nbsp; Số mã đề mới: <input id="nb1" type="number" min="1" max="20" value="3" style="width:70px"> <label class="chk"><input type="checkbox" id="nb2" checked> Đảo thứ tự câu trong từng phần và hoán vị phương án trắc nghiệm</label> <button class="p" id="nb3">Tạo</button> <button id="nb4">Huỷ</button>';
+  $('nb4').onclick=()=>b.style.display='none';$('nb3').onclick=()=>run(()=>gv('gv_deNhanBan',{goc:d.ma,soBan:$('nb1').value,xao:$('nb2').checked}));
 }
-$('word').onchange=()=>{selectedFile=$('word').files[0]||null;$('fileInfo').textContent=selectedFile?selectedFile.name+' · '+Math.round(selectedFile.size/1024)+' KB':''};
-$('parse').onclick=async()=>{try{if(!selectedFile)throw new Error('Hãy chọn tệp Word .docx.');if(!/\.docx$/i.test(selectedFile.name))throw new Error('Chỉ hỗ trợ .docx.');if(!window.mammoth)throw new Error('Không tải được bộ đọc DOCX. Kiểm tra kết nối Internet rồi tải lại cửa sổ.');message('Đang đọc nội dung Word…');const buf=await selectedFile.arrayBuffer();const r=await mammoth.extractRawText({arrayBuffer:buf});parsed=parseDocText(r.value);$('json').value=JSON.stringify(parsed,null,2);$('count').textContent=parsed.length+' câu';$('types').textContent=parsed.filter(x=>x.type==='TN').length+' TN · '+parsed.filter(x=>x.type==='TL').length+' TL';$('warnings').textContent=parsed.filter(x=>x.warning).length+' câu cần rà soát';$('preview').classList.remove('hidden');$('approve').classList.add('hidden');docId=null;message('Đã phân tích. Vui lòng kiểm tra JSON và đối chiếu Word trước khi lưu bản nháp.','ok')}catch(e){message(e.message,'error')}};
-$('saveDraft').onclick=async()=>{try{const m=meta();const qs=JSON.parse($('json').value);if(!Array.isArray(qs))throw new Error('Dữ liệu phải là một mảng JSON.');if(!selectedFile)throw new Error('Tệp Word chưa được chọn.');message('Đang tải Word gốc và lưu bản nháp…');const data=await new Promise((ok,no)=>{const fr=new FileReader();fr.onload=()=>ok(String(fr.result).split(',')[1]);fr.onerror=no;fr.readAsDataURL(selectedFile)});const res=await gv('gv_gbSaveDraft',m,{name:selectedFile.name,mime:selectedFile.type||'application/vnd.openxmlformats-officedocument.wordprocessingml.document',data},qs);docId=res.docId;$('draftInfo').textContent='Hồ sơ '+docId+' · '+res.count+' câu · '+res.fileUrl;$('examCode').value=[m.grade,m.subject.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d').replace(/[^a-zA-Z0-9]/g,'').toUpperCase(),m.term,m.year.replace('-','')].join('_');$('approve').classList.remove('hidden');message(res.message,'ok');loadSets()}catch(e){message(e.message,'error')}};
-$('approveBtn').onclick=async()=>{try{if(!docId)throw new Error('Chưa lưu bản nháp.');message('Đang kiểm tra và nhập ngân hàng…');const r=await gv('gv_gbApprove',docId,$('examCode').value,$('json').value);message('Đã duyệt '+r.questionCount+' câu vào mã đề '+r.examCode+'. Các câu đã được ghi vào NganHang và DeThi.','ok');$('approve').classList.add('hidden');$('preview').classList.add('hidden');docId=null;loadSets()}catch(e){message(e.message,'error')}};
-$('cancel').onclick=()=>$('approve').classList.add('hidden');
-async function loadSets(){try{const r=await gv('gv_gbInfo');$('sets').textContent=r.sets.length?r.sets.map(x=>'• '+x.code+' | Khối '+x.grade+' | '+x.subject+' | '+x.term+' | '+x.campaign+' | '+x.year+' | '+x.status).join('\n'):'Chưa có bộ đề được duyệt.'}catch(e){$('sets').textContent=e.message}}
-loadSets();
+async function xem(ma){
+  const c=$('ct');c.style.display='block';c.textContent='Đang tải…';
+  try{const r=await gv('gv_deChiTiet',ma);
+    c.innerHTML='<b>Mã đề '+ma+' · '+r.cau.length+' câu</b> <span class="mu">Tích chọn câu để bỏ khỏi đề (câu vẫn còn trong ngân hàng).</span> <button id="bo" class="d">Bỏ các câu đã chọn</button> <button id="dg">Đóng</button><table><thead><tr><th></th><th>#</th><th>Mã câu</th><th>Loại</th><th>Nội dung</th><th>Đáp án</th><th>Điểm</th></tr></thead><tbody>'+r.cau.map(x=>'<tr><td><input type="checkbox" value="'+esc(x.id)+'"></td><td>'+x.stt+'</td><td>'+esc(x.id)+'</td><td>'+x.loai+'</td><td>'+esc(x.text)+(x.anh?' <span class="tag">🖼 '+x.anh+' hình</span>':'')+'</td><td>'+esc(x.ans)+'</td><td>'+x.diem+'</td></tr>').join('')+'</tbody></table>';
+    $('dg').onclick=()=>c.style.display='none';
+    $('bo').onclick=()=>{const ids=[...c.querySelectorAll('input:checked')].map(i=>i.value);if(!ids.length)return;if(confirm('Bỏ '+ids.length+' câu khỏi đề '+ma+'?'))run(()=>gv('gv_deBoCau',ma,ids))};
+  }catch(e){c.textContent=e.message}
+}
+tai();
 </script></body></html>

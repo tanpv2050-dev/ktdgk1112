@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="vi"><head><base target="_top"><meta charset="utf-8">
+<style>
+*{box-sizing:border-box}body{margin:0;padding:14px;font:14px/1.5 system-ui,"Segoe UI",Roboto,Arial,sans-serif;color:#1c2230}
+input,select,textarea{font:inherit;padding:5px 8px;border:1px solid #d6dbe8;border-radius:8px;max-width:100%}textarea{width:100%}
+button{font:inherit;cursor:pointer;border:1px solid #d6dbe8;background:#fff;border-radius:8px;padding:5px 10px}button.p{background:#2563eb;color:#fff;border-color:#2563eb;font-weight:600}button.d{color:#dc2626}button:disabled{opacity:.5}
+.mu{color:#5d667a;font-size:.85rem}.err{color:#dc2626;font-weight:600}.ok{color:#16a34a;font-weight:600}
+.bar{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin:8px 0}.bar label,.f label{display:block;font-weight:600;font-size:.85rem}
+table{border-collapse:collapse;width:100%}th,td{border-bottom:1px solid #e5e9f4;padding:5px 6px;text-align:left;vertical-align:top}th{background:#f4f6fb;position:sticky;top:0}
+.box{border:1px solid #d6dbe8;border-radius:10px;padding:10px;margin:10px 0;background:#fafbff}.tag{display:inline-block;padding:0 8px;border-radius:999px;background:#e8eefc;font-size:.8rem}.tag.g{background:#dcfce7}.tag.r{background:#fee2e2}.tag.y{background:#fef3c7}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px}.chk{display:inline-flex;gap:4px;align-items:center;margin:2px 8px 2px 0;font-weight:400}
+</style></head><body>
+<div class="bar">
+ <div><label>Lớp</label><select id="fl"><option value="">Tất cả</option></select></div>
+ <div><label>Tìm</label><input id="q" placeholder="mã hoặc tên"></div>
+ <label class="chk"><input type="checkbox" id="sp"> Hiện mật khẩu</label>
+ <button id="in" class="p">In phiếu tài khoản</button><button id="cp">Sao chép bảng (dán vào Excel)</button>
+</div>
+<div class="bar">
+ <button id="tm">Tạo mật khẩu cho học sinh chưa có</button>
+ <button id="tl">Đặt lại mật khẩu cả lớp đang lọc…</button>
+ <button id="th">Thêm / cập nhật danh sách…</button>
+</div>
+<p id="m" class="mu"></p>
+<div id="ad" class="box f" style="display:none"></div>
+<div class="mu" id="dem"></div>
+<table><thead><tr><th><input type="checkbox" id="all"></th><th>Mã đăng nhập</th><th>Họ tên</th><th>Lớp</th><th>Mật khẩu</th><th></th></tr></thead><tbody id="tb"></tbody></table>
+<p><button id="xo" class="d">Xoá các học sinh đã tích</button></p>
+<script>
+const KEY=<?!= JSON.stringify(KEY) ?>;const $=id=>document.getElementById(id);
+const gv=(fn,...a)=>new Promise((ok,no)=>google.script.run.withSuccessHandler(ok).withFailureHandler(e=>no(new Error(e&&e.message||String(e))))[fn](KEY,...a));
+const msg=(t,c)=>{$('m').className=c||'mu';$('m').textContent=t};
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+let HS=[],T='',URL0='';
+const tai=()=>gv('gv_hsDS').then(r=>{HS=r.hs;T=r.tieuDe;URL0=r.url||'';const ls=[...new Set(HS.map(x=>x.lop))];const cu=$('fl').value;$('fl').innerHTML='<option value="">Tất cả</option>';ls.forEach(l=>$('fl').appendChild(new Option(l,l)));$('fl').value=cu;ve()}).catch(e=>msg(e.message,'err'));
+const loc=()=>{const l=$('fl').value,q=$('q').value.trim().toLowerCase();return HS.filter(x=>(!l||x.lop===l)&&(!q||(x.ma+' '+x.ten).toLowerCase().indexOf(q)>=0))};
+function ve(){
+  const tb=$('tb'),ds=loc(),sp=$('sp').checked;tb.textContent='';
+  $('dem').textContent=ds.length+' học sinh · '+HS.filter(x=>!x.pin).length+' chưa có mật khẩu';
+  ds.forEach(x=>{const tr=document.createElement('tr');
+    tr.innerHTML='<td><input type="checkbox" value="'+esc(x.ma)+'"></td><td>'+esc(x.ma)+'</td><td>'+esc(x.ten)+'</td><td>'+esc(x.lop)+'</td><td style="font-family:monospace">'+(x.pin?(sp?esc(x.pin):'••••••'):'<span class="tag y">chưa có</span>')+'</td><td></td>';
+    const b=document.createElement('button');b.textContent='Đặt lại MK';b.onclick=()=>{const p=prompt('Mật khẩu mới cho '+x.ten+' (để trống = tự sinh ngẫu nhiên):','');if(p===null)return;run(()=>gv('gv_hsDatPin',{mas:[x.ma],pin:p}))};tr.lastChild.appendChild(b);tb.appendChild(tr)});
+}
+async function run(f){try{const r=await f();msg(r&&r.ok||'Xong.','ok');$('ad').style.display='none';await tai()}catch(e){msg(e.message,'err')}}
+['fl','q','sp'].forEach(i=>$(i).oninput=ve);$('all').onchange=()=>$('tb').querySelectorAll('input').forEach(i=>i.checked=$('all').checked);
+$('tm').onclick=()=>run(()=>gv('gv_hsDatPin',{tatCa:true,chiDen:'thieu'}));
+$('tl').onclick=()=>{const l=$('fl').value;if(!l)return msg('Hãy chọn một lớp ở ô Lớp trước.','err');if(confirm('Đặt lại mật khẩu của TOÀN BỘ lớp '+l+'? Mật khẩu cũ sẽ không dùng được nữa.'))run(()=>gv('gv_hsDatPin',{lop:l}))};
+$('xo').onclick=()=>{const m=[...$('tb').querySelectorAll('input:checked')].map(i=>i.value).filter(Boolean);if(!m.length)return msg('Chưa tích học sinh nào.','err');if(confirm('Xoá '+m.length+' học sinh khỏi danh sách? (Bài đã làm vẫn giữ trong KetQua)'))run(()=>gv('gv_hsXoa',m))};
+$('th').onclick=()=>{const a=$('ad');a.style.display='block';
+  a.innerHTML='<b>Thêm / cập nhật danh sách</b><div class="mu">Dán từ Excel, mỗi học sinh một dòng, các cột cách nhau bằng Tab hoặc dấu phẩy: <b>Mã đăng nhập · Họ tên · Lớp · (Mật khẩu – tuỳ chọn)</b>. Mã đã có thì cập nhật; học sinh mới không ghi mật khẩu sẽ được tự sinh.</div><textarea id="tx" rows="8" placeholder="1184486542	Nguyễn Văn A	12C3"></textarea><p><button class="p" id="ok">Lưu</button> <button id="hu">Huỷ</button></p>';
+  $('hu').onclick=()=>a.style.display='none';
+  $('ok').onclick=()=>{const rows=$('tx').value.split('\n').map(l=>l.split(/\t|;|,/).map(s=>s.trim())).filter(c=>c[0]).map(c=>({ma:c[0],ten:c[1]||'',lop:c[2]||'',pin:c[3]||''}));if(!rows.length)return msg('Chưa có dòng nào.','err');run(()=>gv('gv_hsLuu',rows))}};
+$('cp').onclick=()=>{const t=loc().map(x=>[x.ma,x.ten,x.lop,x.pin].join('\t')).join('\n');(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>msg('Đã sao chép '+loc().length+' dòng.','ok')).catch(()=>{const a=$('ad');a.style.display='block';a.innerHTML='<b>Chọn tất cả rồi sao chép (Ctrl+C):</b><textarea rows="8" id="tx2"></textarea>';$('tx2').value=t;$('tx2').select()})};
+$('in').onclick=()=>{
+  const ds=loc().filter(x=>x.pin);if(!ds.length)return msg('Không có học sinh nào có mật khẩu để in.','err');
+  const w=window.open('','_blank');if(!w)return msg('Trình duyệt chặn cửa sổ in. Hãy cho phép cửa sổ bật lên rồi thử lại.','err');
+  w.document.write('<!DOCTYPE html><meta charset="utf-8"><title>Phiếu tài khoản</title><style>body{font:13px system-ui,Arial;margin:10mm}.g{display:grid;grid-template-columns:1fr 1fr;gap:6mm}.c{border:1px dashed #555;padding:5mm;break-inside:avoid}.c b{font-size:14px}.k{font:700 16px monospace;letter-spacing:1px}small{color:#555}</style><div class="g">'+ds.map(x=>'<div class="c"><b>'+esc(T)+'</b><br>Họ tên: '+esc(x.ten)+' &nbsp; Lớp: '+esc(x.lop)+'<br>Mã đăng nhập: <span class="k">'+esc(x.ma)+'</span><br>Mật khẩu: <span class="k">'+esc(x.pin)+'</span>'+(URL0?'<br><small>'+esc(URL0)+'</small>':'')+'<br><small>Chọn đúng Kì thi, Lớp, Môn rồi nhập mã và mật khẩu. Giữ bí mật mật khẩu.</small></div>').join('')+'</div><script>onload=()=>print()<\/script>');
+  w.document.close()};
+tai();
+</script></body></html>

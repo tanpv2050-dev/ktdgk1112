@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="vi"><head><base target="_top"><meta charset="utf-8">
+<style>
+*{box-sizing:border-box}body{margin:0;padding:14px;font:14px/1.5 system-ui,"Segoe UI",Roboto,Arial,sans-serif;color:#1c2230}
+input,select,textarea{font:inherit;padding:5px 8px;border:1px solid #d6dbe8;border-radius:8px;max-width:100%}textarea{width:100%}
+button{font:inherit;cursor:pointer;border:1px solid #d6dbe8;background:#fff;border-radius:8px;padding:5px 10px}button.p{background:#2563eb;color:#fff;border-color:#2563eb;font-weight:600}button.d{color:#dc2626}button:disabled{opacity:.5}
+.mu{color:#5d667a;font-size:.85rem}.err{color:#dc2626;font-weight:600}.ok{color:#16a34a;font-weight:600}
+.bar{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin:8px 0}.bar label,.f label{display:block;font-weight:600;font-size:.85rem}
+table{border-collapse:collapse;width:100%}th,td{border-bottom:1px solid #e5e9f4;padding:5px 6px;text-align:left;vertical-align:top}th{background:#f4f6fb;position:sticky;top:0}
+.box{border:1px solid #d6dbe8;border-radius:10px;padding:10px;margin:10px 0;background:#fafbff}.tag{display:inline-block;padding:0 8px;border-radius:999px;background:#e8eefc;font-size:.8rem}.tag.g{background:#dcfce7}.tag.r{background:#fee2e2}.tag.y{background:#fef3c7}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px}.chk{display:inline-flex;gap:4px;align-items:center;margin:2px 8px 2px 0;font-weight:400}
+</style></head><body>
+<div class="bar"><button class="p" id="moi">+ Tạo kỳ thi mới</button><button id="lm">Làm mới</button></div>
+<p id="m" class="mu"></p>
+<div id="fm" class="box f" style="display:none"></div>
+<table><thead><tr><th>Mã kỳ</th><th>Tên kỳ thi</th><th>Khối</th><th>Môn</th><th>Lớp</th><th>Thời gian mở</th><th>Phút</th><th>Mã đề</th><th>Bài làm</th><th>Trạng thái</th><th></th></tr></thead><tbody id="tb"></tbody></table>
+<p class="mu">Ghi chú: để trống <b>Lớp</b> = mọi lớp của khối · để trống <b>Mã đề</b> = dùng mọi mã đề đang dùng của đúng khối + môn (chia đều cho học sinh) · để trống <b>Giờ</b> = mở/đóng thủ công bằng nút Trạng thái · <b>Phút/Thang điểm</b> để trống = lấy từ sheet CauHinh. Cùng một kỳ thi có thể có nhiều môn: mỗi môn một dòng, mỗi môn có giờ, mã đề, thời lượng và việc công bố điểm riêng.</p>
+<script>
+const KEY=<?!= JSON.stringify(KEY) ?>;const $=id=>document.getElementById(id);
+const gv=(fn,...a)=>new Promise((ok,no)=>google.script.run.withSuccessHandler(ok).withFailureHandler(e=>no(new Error(e&&e.message||String(e))))[fn](KEY,...a));
+const msg=(t,c)=>{$('m').className=c||'mu';$('m').textContent=t};
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+let DATA=null;
+const tai=()=>gv('gv_kyDS').then(r=>{DATA=r;ve()}).catch(e=>msg(e.message,'err'));
+async function run(f,ok){try{const r=await f();msg(r&&r.ok&&r.ok!==1?r.ok:(ok||'Xong.'),'ok');await tai();return 1}catch(e){msg(e.message,'err')}}
+function ve(){
+  const tb=$('tb');tb.textContent='';
+  if(!DATA.ky.length){tb.innerHTML='<tr><td colspan="11" class="mu">Chưa có kỳ thi. Bấm "Tạo kỳ thi mới". (Khi KyThi trống, trang thi chạy kiểu cũ, không có chọn kỳ/môn.)</td></tr>'}
+  DATA.ky.forEach(k=>{
+    const tr=document.createElement('tr'),g=(a,b)=>a?a.replace('T',' '):'—';
+    tr.innerHTML='<td><b>'+esc(k.ma)+'</b></td><td>'+esc(k.ten)+(k.nam?'<div class="mu">'+esc(k.nam)+'</div>':'')+'</td><td>'+(k.khoi||'tất cả')+'</td><td>'+esc(k.mon)+'</td><td>'+(esc(k.lop)||'mọi lớp')+'</td><td>'+g(k.bd)+'<br>→ '+g(k.kt)+'</td><td>'+(k.tl||'mặc định')+'</td><td>'+(esc(k.de)||'<span class="mu">tự động ('+k.soDe+' đề)</span>')+'</td><td>'+k.daNop+' đã nộp'+(k.dangLam?'<br>'+k.dangLam+' đang làm':'')+'</td><td></td><td></td>';
+    const t1=tr.cells[9],t2=tr.cells[10],bt=(h,t,f,c)=>{const b=document.createElement('button');b.textContent=t;if(c)b.className=c;b.onclick=f;h.append(b,' ')};
+    t1.innerHTML='<span class="tag '+(k.tt==='MO'?'g':'r')+'">'+(k.tt==='MO'?'Đang mở':'Đóng')+'</span> <span class="tag '+(k.cb?'g':'y')+'">'+(k.cb?'Đã công bố TL':'Chưa công bố TL')+'</span><br>';
+    bt(t1,k.tt==='MO'?'Đóng':'Mở',()=>run(()=>gv('gv_kyDoi',k.ma,k.khoi,k.mon,'tt',k.tt==='MO'?'DONG':'MO')));
+    bt(t1,k.cb?'Thu hồi điểm':'Công bố điểm',()=>run(()=>gv('gv_kyDoi',k.ma,k.khoi,k.mon,'cb',!k.cb)));
+    bt(t2,'Sửa',()=>form(k));bt(t2,'Xoá',()=>{if(confirm('Xoá kỳ thi '+k.ma+' – '+k.mon+'?'))run(()=>gv('gv_kyXoa',k.ma,k.khoi,k.mon))},'d');
+    tb.appendChild(tr)});
+}
+function form(k){
+  const sua=!!k;k=k||{ma:'',ten:'',nam:'',khoi:'',mon:'',lop:'',de:'',bd:'',kt:'',tl:'',thang:'',tt:'MO',cb:false,gc:''};
+  const f=$('fm');f.style.display='block';
+  const lopSet=(k.lop||'').split(/[\s,;]+/).filter(Boolean).map(x=>x.toUpperCase());
+  const deSet=(k.de||'').split(/[\s,;]+/).filter(Boolean);
+  f.innerHTML='<b>'+(sua?'Sửa kỳ thi '+esc(k.ma)+' – '+esc(k.mon):'Tạo kỳ thi mới')+'</b><div class="grid" style="margin-top:6px">'+
+  '<div><label>Mã kỳ thi (không dấu)</label><input id="a1" value="'+esc(k.ma)+'" placeholder="GK1-2627"></div>'+
+  '<div><label>Tên kỳ thi</label><input id="a2" value="'+esc(k.ten)+'" placeholder="Kiểm tra giữa kỳ I"></div>'+
+  '<div><label>Năm học</label><input id="a3" value="'+esc(k.nam)+'" placeholder="2026-2027"></div>'+
+  '<div><label>Khối</label><select id="a4"><option value="">Tất cả khối</option><option>10</option><option>11</option><option>12</option></select></div>'+
+  '<div><label>Bắt đầu mở</label><input id="a5" type="datetime-local" value="'+esc(k.bd)+'"></div>'+
+  '<div><label>Đóng lúc</label><input id="a6" type="datetime-local" value="'+esc(k.kt)+'"></div>'+
+  '<div><label>Thời lượng (phút)</label><input id="a7" type="number" value="'+esc(k.tl)+'" placeholder="mặc định"></div>'+
+  '<div><label>Thang điểm</label><input id="a8" type="number" value="'+esc(k.thang)+'" placeholder="10"></div>'+
+  '<div><label>Trạng thái</label><select id="a9"><option value="MO">Đang mở</option><option value="DONG">Đóng</option></select></div></div>'+
+  '<div style="margin-top:6px"><label class="f" style="font-weight:600">Môn thi '+(sua?'':'(chọn nhiều môn nếu các môn cùng khung giờ)')+'</label><span id="mons"></span></div>'+
+  '<div style="margin-top:6px"><label style="font-weight:600">Lớp dự thi</label><span id="lops"></span><div class="mu">Không chọn lớp nào = mọi lớp thuộc khối.'+(DATA.dsLop.length?'':' (Chưa có sheet DanhSach: nhập tay các lớp, cách nhau dấu phẩy)')+'</div></div>'+
+  '<div style="margin-top:6px"><label style="font-weight:600">Mã đề dùng cho kỳ này</label><span id="des"></span><div class="mu">Không chọn = tất cả mã đề đang dùng của khối + môn (tự chia đều).</div></div>'+
+  '<div style="margin-top:6px"><label style="font-weight:600">Ghi chú</label><input id="a10" style="width:100%" value="'+esc(k.gc)+'"></div>'+
+  '<label class="chk" style="margin-top:6px"><input type="checkbox" id="a11"'+(k.cb?' checked':'')+'> Công bố điểm tự luận cho học sinh</label>'+
+  '<p><button class="p" id="luu">Lưu</button> <button id="huy">Huỷ</button></p>';
+  $('a4').value=k.khoi||'';$('a9').value=k.tt;if(sua)$('a1').readOnly=true;
+  const mons=$('mons');DATA.mon.forEach(m=>{const l=document.createElement('label');l.className='chk';const i=document.createElement(sua?'input':'input');i.type=sua?'radio':'checkbox';i.name='mon';i.value=m;if(sua&&m.toLowerCase()===k.mon.toLowerCase())i.checked=true;l.append(i,' '+m);mons.appendChild(l)});
+  const lops=$('lops');
+  if(DATA.dsLop.length){DATA.dsLop.forEach(x=>{const l=document.createElement('label');l.className='chk';const i=document.createElement('input');i.type='checkbox';i.value=x;i.checked=lopSet.indexOf(x.toUpperCase())>=0;l.append(i,' '+x);lops.appendChild(l)})}
+  else{const i=document.createElement('input');i.id='lopTay';i.value=k.lop;i.style.width='60%';lops.appendChild(i)}
+  const dsD=()=>{const kh=$('a4').value,ms=[...mons.querySelectorAll('input:checked')].map(x=>x.value.toLowerCase());const des=$('des');des.textContent='';
+    DATA.de.filter(d=>d.tt==='ACTIVE'&&(!kh||d.khoi===kh)&&(!ms.length||ms.indexOf(d.mon.toLowerCase())>=0)).forEach(d=>{const l=document.createElement('label');l.className='chk';const i=document.createElement('input');i.type='checkbox';i.value=d.ma;i.checked=deSet.indexOf(d.ma)>=0;l.append(i,' '+d.ma+' ('+d.n+' câu'+(ms.length!==1?' · '+d.mon:'')+')');des.appendChild(l)});
+    if(!des.firstChild)des.innerHTML='<span class="mu">Chưa có mã đề phù hợp khối/môn đã chọn.</span>'};
+  dsD();$('a4').onchange=dsD;mons.onchange=dsD;
+  $('huy').onclick=()=>f.style.display='none';
+  $('luu').onclick=async()=>{
+    const ms=[...mons.querySelectorAll('input:checked')].map(x=>x.value);
+    const lop=DATA.dsLop.length?[...$('lops').querySelectorAll('input:checked')].map(x=>x.value).join(', '):($('lopTay')?$('lopTay').value:'');
+    const de=[...$('des').querySelectorAll('input:checked')].map(x=>x.value).join(', ');
+    const o={ma:$('a1').value,ten:$('a2').value,nam:$('a3').value,khoi:$('a4').value,bd:$('a5').value,kt:$('a6').value,tl:$('a7').value,thang:$('a8').value,tt:$('a9').value,cb:$('a11').checked,gc:$('a10').value,lop:lop,de:de};
+    if(sua){o.mon=ms[0];o.goc={ma:k.ma,khoi:k.khoi,mon:k.mon}}else o.mons=ms;
+    $('luu').disabled=true;if(await run(()=>gv('gv_kyLuu',o)))f.style.display='none';$('luu').disabled=false};
+  f.scrollIntoView();
+}
+$('moi').onclick=()=>form(null);$('lm').onclick=tai;tai();
+</script></body></html>
